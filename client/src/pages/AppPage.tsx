@@ -123,6 +123,7 @@ export default function AppPage() {
   const genTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeGenerationProjectIdRef = useRef<string | null>(null);
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const loadingProjectIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setTimeout(() => {
@@ -232,6 +233,10 @@ export default function AppPage() {
   const pendingIntentRef = useRef<"inspiration" | "reference">("inspiration");
   const [authModalContext, setAuthModalContext] = useState<"default" | "image" | "generation">("default");
   const [projectList, setProjectList] = useState<{ id: string; name: string }[]>([]);
+
+  // Fix: prevent empty screen flash on project switch
+  const [isLoadingProject, setIsLoadingProject] = useState(false);
+  const [previousMessages, setPreviousMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     if (!authState.loading && !authState.isAuthenticated) {
@@ -404,12 +409,20 @@ export default function AppPage() {
     return chatState.messages.filter(msg => msg.project_id === currentActiveId);
   }, [chatState.messages, currentActiveId]);
 
+  // Fix: use previousMessages during loading to avoid empty flash
+  const displayMessages = isLoadingProject && previousMessages.length > 0 ? previousMessages : currentMessages;
+  const isEmptyAuthenticatedProject = authState.isAuthenticated && !isLoadingProject && currentMessages.length === 0;
+
+  // Keep previousMessages in sync with currentMessages (for next project switch)
+  useEffect(() => {
+    setPreviousMessages(currentMessages);
+  }, [currentMessages]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isGenerating = generationState.status === 'pending' || generationState.status === 'running';
   const isSendLocked = introRunning || isGenerating || isSending;
-  const isEmptyAuthenticatedProject = authState.isAuthenticated && currentMessages.length === 0;
 
   // --- MOBILE SCROLL FIX: two separate effects ---
 
@@ -424,7 +437,7 @@ export default function AppPage() {
       }
     }, 50);
     return () => clearTimeout(timer);
-  }, [currentMessages, generationState.status]);
+  }, [displayMessages, generationState.status]);
 
   // 2. Initial load / project change – ensures mobile scroll works on first load
   useEffect(() => {
@@ -592,6 +605,10 @@ export default function AppPage() {
     const projectId = projectState.activeProject?.project_id;
     if (!projectId) return;
 
+    // Set loading state for this project
+    setIsLoadingProject(true);
+    loadingProjectIdRef.current = projectId;
+
     const loadHistory = async (options?: { skipMessages?: boolean; skipScroll?: boolean }) => {
       const [chatMessages, galleryResult, projectRowResult] = await Promise.all([
         options?.skipMessages ? [] : fetchProjectMessages(projectId),
@@ -720,7 +737,13 @@ export default function AppPage() {
 
     realtimeChannelRef.current = channel;
 
-    loadHistory();
+    // Load history and then set loading false
+    loadHistory().finally(() => {
+      // Only set loading false if the project hasn't changed in the meantime
+      if (loadingProjectIdRef.current === projectId) {
+        setIsLoadingProject(false);
+      }
+    });
 
     return () => {
       if (realtimeChannelRef.current) {
@@ -1383,7 +1406,7 @@ export default function AppPage() {
               <ScrollArea className="flex-1 p-4" ref={scrollRef}>
                 <div className="max-w-3xl mx-auto space-y-6 py-4">
                   <AnimatePresence initial={false}>
-                    {currentMessages.map((msg) => (
+                    {displayMessages.map((msg) => (
                       <motion.div
                         key={msg.chat_message_id}
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
