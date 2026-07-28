@@ -233,10 +233,6 @@ export default function AppPage() {
   const [authModalContext, setAuthModalContext] = useState<"default" | "image" | "generation">("default");
   const [projectList, setProjectList] = useState<{ id: string; name: string }[]>([]);
 
-  // Fix: prevent empty screen flash on project switch
-  const [isLoadingProject, setIsLoadingProject] = useState(false);
-  const [previousMessages, setPreviousMessages] = useState<ChatMessage[]>([]);
-
   useEffect(() => {
     if (!authState.loading && !authState.isAuthenticated) {
       const STORAGE_KEY = "easypeasy_session_project_id";
@@ -408,30 +404,12 @@ export default function AppPage() {
     return chatState.messages.filter(msg => msg.project_id === currentActiveId);
   }, [chatState.messages, currentActiveId]);
 
-  // Fix: use previous messages during loading to avoid empty flash
-  const displayMessages = currentMessages.length > 0 ? currentMessages : previousMessages;
-  const isEmptyAuthenticatedProject = authState.isAuthenticated && displayMessages.length === 0 && !isLoadingProject;
-
-  // Detect project switching
-  useEffect(() => {
-    if (projectState.activeProject?.project_id) {
-      setIsLoadingProject(true);
-    }
-  }, [projectState.activeProject?.project_id]);
-
-  // Capture messages when they load
-  useEffect(() => {
-    if (currentMessages.length > 0) {
-      setPreviousMessages(currentMessages);
-      setIsLoadingProject(false);
-    }
-  }, [currentMessages]);
-
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isGenerating = generationState.status === 'pending' || generationState.status === 'running';
   const isSendLocked = introRunning || isGenerating || isSending;
+  const isEmptyAuthenticatedProject = authState.isAuthenticated && currentMessages.length === 0;
 
   // --- MOBILE SCROLL FIX: two separate effects ---
 
@@ -446,7 +424,7 @@ export default function AppPage() {
       }
     }, 50);
     return () => clearTimeout(timer);
-  }, [displayMessages, generationState.status]);
+  }, [currentMessages, generationState.status]);
 
   // 2. Initial load / project change – ensures mobile scroll works on first load
   useEffect(() => {
@@ -1405,7 +1383,7 @@ export default function AppPage() {
               <ScrollArea className="flex-1 p-4" ref={scrollRef}>
                 <div className="max-w-3xl mx-auto space-y-6 py-4">
                   <AnimatePresence initial={false}>
-                    {displayMessages.map((msg) => (
+                    {currentMessages.map((msg) => (
                       <motion.div
                         key={msg.chat_message_id}
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
