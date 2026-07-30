@@ -120,7 +120,6 @@ export default function AppPage() {
   const { state: chatState, addMessage, setMessages, updateMessage } = useChat();
   const { state: generationState, setStatus, addImages, setImages } = useGeneration();
   const inputRef = useRef<HTMLInputElement>(null);
-  const genTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeGenerationProjectIdRef = useRef<string | null>(null);
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const loadingProjectIdRef = useRef<string | null>(null);
@@ -721,14 +720,11 @@ export default function AppPage() {
           if (payload.new.generation_status === 'completed') {
             console.log('[Realtime] Generation completed for project', projectId);
             
-            if (genTimeoutRef.current) {
-              clearTimeout(genTimeoutRef.current);
-              genTimeoutRef.current = null;
-            }
-
+            // Reset local state
             setStatus('idle');
             stopLoadingTimer();
             setSendingProjects(prev => { const n = { ...prev }; delete n[projectId]; return n; });
+            activeGenerationProjectIdRef.current = null;
             loadHistory({ skipScroll: false });
           }
         }
@@ -1071,7 +1067,7 @@ export default function AppPage() {
       }
       const data: {
         text: string;
-        status?: "reply" | "starting_generation" | "generation_started" | "generation_complete";
+        status?: "reply" | "starting_generation" | "generation_started" | "generation_complete" | "generation_failed";
         images?: string[];
         creditsRemaining?: number;
         trigger_modal?: "none" | "signup_required";
@@ -1079,24 +1075,29 @@ export default function AppPage() {
         concept_1_url?: string;
         concept_2_title?: string;
         concept_2_url?: string;
+        error?: string;
       } = await res.json();
+
+      // ---- NEW: Handle generation_failed from n8n error workflow ----
+      if (data.status === "generation_failed") {
+        setGenError(data.error || "Generation failed. Please try again.");
+        setStatus("idle");
+        stopLoadingTimer();
+        const pid = activeGenerationProjectIdRef.current;
+        if (pid) {
+          setSendingProjects(prev => { const n = { ...prev }; delete n[pid]; return n; });
+        }
+        activeGenerationProjectIdRef.current = null;
+        // Ensure the loading state is cleared for this project
+        return;
+      }
+
       if (data.status === "generation_started" || data.status === "starting_generation") {
         handedOffToRealtime = true;
         activeGenerationProjectIdRef.current = projectId;
         setStatus("running");
         addSystemMessage("Creating concepts...");
-        if (genTimeoutRef.current) clearTimeout(genTimeoutRef.current);
-        genTimeoutRef.current = setTimeout(() => {
-          setGenError("Generation timed out. Please try again.");
-          setStatus("idle");
-          stopLoadingTimer();
-          const pid = activeGenerationProjectIdRef.current;
-          if (pid) setSendingProjects(prev => { const n = { ...prev }; delete n[pid]; return n; });
-          activeGenerationProjectIdRef.current = null;
-          genTimeoutRef.current = null;
-          setTimeout(() => inputRef.current?.focus(), 0);
-        }, 300_000);
-        // Do NOT reset DB status here – callback will handle it
+        // No timeout – n8n will send generation_failed or generation_complete via callback
         return;
       }
       if (data.trigger_modal === "signup_required") {
@@ -1118,8 +1119,15 @@ export default function AppPage() {
             .eq("project_id", projectId);
           console.log("[DB] Reset status to idle (signup required)");
         } catch (dbErr) { /* ignore */ }
+        // Reset local generation state as well
+        setStatus('idle');
+        stopLoadingTimer();
+        const pid = activeGenerationProjectIdRef.current;
+        if (pid) setSendingProjects(prev => { const n = { ...prev }; delete n[pid]; return n; });
+        activeGenerationProjectIdRef.current = null;
         return;
       }
+      // Normal reply or completion
       const assistantMsg: ChatMessage = {
         chat_message_id: crypto.randomUUID(),
         project_id: projectId,
@@ -1197,6 +1205,7 @@ export default function AppPage() {
           generation_status: 'idle'
         });
         setSendingProjects(prev => { const n = {...prev}; delete n[projectId!]; return n; });
+        activeGenerationProjectIdRef.current = null;
       }
       if (data.creditsRemaining !== undefined) {
         setCredits(data.creditsRemaining);
@@ -1222,6 +1231,7 @@ export default function AppPage() {
           generation_status: 'idle'
         });
         setSendingProjects(prev => { const n = {...prev}; delete n[projectId!]; return n; });
+        activeGenerationProjectIdRef.current = null;
       }
     } finally {
       // ============================================================
@@ -1240,6 +1250,7 @@ export default function AppPage() {
           console.warn("[DB] Reset FAILED:", dbErr);
         }
         if (projectId) setSendingProjects(prev => { const n = {...prev}; delete n[projectId!]; return n; });
+        activeGenerationProjectIdRef.current = null;
         setTimeout(() => inputRef.current?.focus(), 0);
       } else {
         console.log("[DB] Skipped reset – generation handed off to Realtime");
@@ -1432,7 +1443,8 @@ export default function AppPage() {
                       </motion.div>
                     ))}
                   </AnimatePresence>
-                  {(isGenerating || isSending || showIntroTyping) && (
+                  {/* Show dots only if generation is active AND it's the current project */}
+                  {((isGenerating && activeGenerationProjectIdRef.current === currentActiveId) || isSending || showIntroTyping) && (
                     <div className="flex justify-start">
                       <div className="bg-muted/80 rounded-2xl rounded-tl-none p-4 flex items-center gap-3 border border-border/50">
                         <div className="flex items-center gap-1.5 px-1 py-1">
