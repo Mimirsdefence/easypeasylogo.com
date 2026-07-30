@@ -197,7 +197,7 @@ export default function AppPage() {
     }
   };
 
-  // 🔥 Updated to accept an optional projectId override
+  // System message helper (for "Creating concepts...")
   const addSystemMessage = (text: string, projectIdOverride?: string) => {
     const projectId = projectIdOverride || projectState.activeProject?.project_id || localStorage.getItem("easypeasy_session_project_id");
     if (!projectId) return;
@@ -218,7 +218,6 @@ export default function AppPage() {
   const isSending = !!sendingProjects[currentActiveId];
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
-  // 🔥 REMOVED: const [genErrors, setGenErrors] = useState<Record<string, string>>({});
   const [archiveOpen, setArchiveOpen] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -423,8 +422,6 @@ export default function AppPage() {
 
   const isGenerating = generationState.status === 'pending' || generationState.status === 'running';
   const isSendLocked = introRunning || isGenerating || isSending;
-
-  // 🔥 No need for currentGenError – errors are now system messages in chat
 
   // --- MOBILE SCROLL FIX: two separate effects ---
 
@@ -973,9 +970,6 @@ export default function AppPage() {
       return;
     }
 
-    // 🔥 Clear any error messages for this project by removing system messages with error text? 
-    // Not necessary – we'll let the error be added once; user can dismiss by sending new message or it will remain.
-
     // ============================================================
     // 🔥 OPTIMISTIC DB UPDATE – set status to 'generating'
     // ============================================================
@@ -1083,11 +1077,36 @@ export default function AppPage() {
         error?: string;
       } = await res.json();
 
-      // ---- 🔥 NEW: Handle generation_failed by inserting system message ----
+      // ---- 🔥 NEW: Handle generation_failed as designer message ----
       if (data.status === "generation_failed") {
         const errorText = data.error || "Generation failed. Please try again.";
-        // Insert as a system message in the chat for this project
-        addSystemMessage(errorText, projectId);
+        
+        // Create a designer message (not system)
+        const errorMsg: ChatMessage = {
+          chat_message_id: crypto.randomUUID(),
+          project_id: projectId,
+          sender: "designer",
+          content: errorText,
+          created_at: new Date().toISOString()
+        };
+        
+        // Add to local state
+        addMessage(errorMsg);
+        
+        // Persist to Supabase
+        try {
+          await supabase
+            .from("chat_messages")
+            .insert({
+              project_id: projectId,
+              sender: "designer",
+              content: errorText,
+              created_at: errorMsg.created_at
+            });
+        } catch (dbErr) {
+          console.error("Failed to persist error message:", dbErr);
+        }
+        
         setStatus("idle");
         stopLoadingTimer();
         const pid = activeGenerationProjectIdRef.current;
@@ -1219,8 +1238,28 @@ export default function AppPage() {
       if (wasGenerating) {
         console.warn("Connection dropped mid-generation:", err?.message);
       } else {
-        // Insert error as system message
-        addSystemMessage("Failed to reach designer. Please try again.", projectId);
+        // Insert error as designer message
+        const errorText = "Failed to reach designer. Please try again.";
+        const errorMsg: ChatMessage = {
+          chat_message_id: crypto.randomUUID(),
+          project_id: projectId,
+          sender: "designer",
+          content: errorText,
+          created_at: new Date().toISOString()
+        };
+        addMessage(errorMsg);
+        try {
+          await supabase
+            .from("chat_messages")
+            .insert({
+              project_id: projectId,
+              sender: "designer",
+              content: errorText,
+              created_at: errorMsg.created_at
+            });
+        } catch (dbErr) {
+          console.error("Failed to persist error message:", dbErr);
+        }
         setStatus('idle');
         stopLoadingTimer();
         // Reset status on fetch error
@@ -1490,7 +1529,6 @@ export default function AppPage() {
                       </div>
                     </div>
                   )}
-                  {/* 🔥 Removed the separate error box – errors are now system messages */}
                 </div>
               </ScrollArea>
 
