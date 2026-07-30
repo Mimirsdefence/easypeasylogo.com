@@ -217,7 +217,8 @@ export default function AppPage() {
   const isSending = !!sendingProjects[currentActiveId];
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
-  const [genError, setGenError] = useState<string | null>(null);
+  // Store errors per project, so they don't leak to other projects
+  const [genErrors, setGenErrors] = useState<Record<string, string>>({});
   const [archiveOpen, setArchiveOpen] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -236,6 +237,23 @@ export default function AppPage() {
   // Fix: prevent empty screen flash on project switch
   const [isLoadingProject, setIsLoadingProject] = useState(false);
   const [previousMessages, setPreviousMessages] = useState<ChatMessage[]>([]);
+
+  // Project-specific error for the current project
+  const currentGenError = genErrors[currentActiveId] || null;
+
+  // Helper to set an error for a specific project
+  const setProjectError = (projectId: string, message: string) => {
+    setGenErrors(prev => ({ ...prev, [projectId]: message }));
+  };
+
+  // Helper to clear error for a specific project
+  const clearProjectError = (projectId: string) => {
+    setGenErrors(prev => {
+      const n = { ...prev };
+      delete n[projectId];
+      return n;
+    });
+  };
 
   useEffect(() => {
     if (!authState.loading && !authState.isAuthenticated) {
@@ -374,6 +392,8 @@ export default function AppPage() {
           setStatus('idle');
           stopLoadingTimer();
           setSendingProjects({});
+          // Clear any errors for this project
+          clearProjectError(deleteProject.id);
         }
       }
     } finally {
@@ -725,6 +745,8 @@ export default function AppPage() {
             stopLoadingTimer();
             setSendingProjects(prev => { const n = { ...prev }; delete n[projectId]; return n; });
             activeGenerationProjectIdRef.current = null;
+            // Clear any errors for this project
+            clearProjectError(projectId);
             loadHistory({ skipScroll: false });
           }
         }
@@ -1043,7 +1065,8 @@ export default function AppPage() {
     setAttachedImageUrls([]);
     setAttachedRawFile(null);
     setActiveImageUsage(null);
-    setGenError(null);
+    // Clear any previous errors for this project before sending a new message
+    clearProjectError(projectId);
     let handedOffToRealtime = false;
     try {
       const resolvedProjectId = projectState.activeProject?.project_id || projectId || "";
@@ -1078,9 +1101,9 @@ export default function AppPage() {
         error?: string;
       } = await res.json();
 
-      // ---- NEW: Handle generation_failed from n8n error workflow ----
+      // ---- Handle generation_failed from n8n error workflow ----
       if (data.status === "generation_failed") {
-        setGenError(data.error || "Generation failed. Please try again.");
+        setProjectError(projectId, data.error || "Generation failed. Please try again.");
         setStatus("idle");
         stopLoadingTimer();
         const pid = activeGenerationProjectIdRef.current;
@@ -1206,6 +1229,8 @@ export default function AppPage() {
         });
         setSendingProjects(prev => { const n = {...prev}; delete n[projectId!]; return n; });
         activeGenerationProjectIdRef.current = null;
+        // Clear any errors for this project on success
+        clearProjectError(projectId);
       }
       if (data.creditsRemaining !== undefined) {
         setCredits(data.creditsRemaining);
@@ -1215,7 +1240,7 @@ export default function AppPage() {
       if (wasGenerating) {
         console.warn("Connection dropped mid-generation:", err?.message);
       } else {
-        setGenError("Failed to reach designer. Please try again.");
+        setProjectError(projectId, "Failed to reach designer. Please try again.");
         setStatus('idle');
         stopLoadingTimer();
         // Reset status on fetch error
@@ -1485,10 +1510,10 @@ export default function AppPage() {
                       </div>
                     </div>
                   )}
-                  {genError && (
+                  {currentGenError && (
                     <div className="flex justify-start">
                       <div className="bg-destructive/10 text-destructive rounded-2xl rounded-tl-none p-4 border border-destructive/20" data-testid="text-gen-error">
-                        <p className="text-sm">{genError}</p>
+                        <p className="text-sm">{currentGenError}</p>
                       </div>
                     </div>
                   )}
