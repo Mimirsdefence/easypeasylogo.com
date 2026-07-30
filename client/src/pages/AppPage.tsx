@@ -217,7 +217,7 @@ export default function AppPage() {
   const isSending = !!sendingProjects[currentActiveId];
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
-  // Store errors per project, so they don't leak to other projects
+  // 🔥 FIX: Store errors per project
   const [genErrors, setGenErrors] = useState<Record<string, string>>({});
   const [archiveOpen, setArchiveOpen] = useState(true);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -237,23 +237,6 @@ export default function AppPage() {
   // Fix: prevent empty screen flash on project switch
   const [isLoadingProject, setIsLoadingProject] = useState(false);
   const [previousMessages, setPreviousMessages] = useState<ChatMessage[]>([]);
-
-  // Project-specific error for the current project
-  const currentGenError = genErrors[currentActiveId] || null;
-
-  // Helper to set an error for a specific project
-  const setProjectError = (projectId: string, message: string) => {
-    setGenErrors(prev => ({ ...prev, [projectId]: message }));
-  };
-
-  // Helper to clear error for a specific project
-  const clearProjectError = (projectId: string) => {
-    setGenErrors(prev => {
-      const n = { ...prev };
-      delete n[projectId];
-      return n;
-    });
-  };
 
   useEffect(() => {
     if (!authState.loading && !authState.isAuthenticated) {
@@ -392,8 +375,6 @@ export default function AppPage() {
           setStatus('idle');
           stopLoadingTimer();
           setSendingProjects({});
-          // Clear any errors for this project
-          clearProjectError(deleteProject.id);
         }
       }
     } finally {
@@ -442,6 +423,9 @@ export default function AppPage() {
 
   const isGenerating = generationState.status === 'pending' || generationState.status === 'running';
   const isSendLocked = introRunning || isGenerating || isSending;
+
+  // Current project's error (if any)
+  const currentGenError = genErrors[currentActiveId] || null;
 
   // --- MOBILE SCROLL FIX: two separate effects ---
 
@@ -745,8 +729,8 @@ export default function AppPage() {
             stopLoadingTimer();
             setSendingProjects(prev => { const n = { ...prev }; delete n[projectId]; return n; });
             activeGenerationProjectIdRef.current = null;
-            // Clear any errors for this project
-            clearProjectError(projectId);
+            // Clear error for this project
+            setGenErrors(prev => { const n = { ...prev }; delete n[projectId]; return n; });
             loadHistory({ skipScroll: false });
           }
         }
@@ -992,6 +976,9 @@ export default function AppPage() {
       return;
     }
 
+    // Clear any previous error for this project
+    setGenErrors(prev => { const n = { ...prev }; delete n[projectId]; return n; });
+
     // ============================================================
     // 🔥 OPTIMISTIC DB UPDATE – set status to 'generating'
     // ============================================================
@@ -1065,8 +1052,6 @@ export default function AppPage() {
     setAttachedImageUrls([]);
     setAttachedRawFile(null);
     setActiveImageUsage(null);
-    // Clear any previous errors for this project before sending a new message
-    clearProjectError(projectId);
     let handedOffToRealtime = false;
     try {
       const resolvedProjectId = projectState.activeProject?.project_id || projectId || "";
@@ -1101,9 +1086,9 @@ export default function AppPage() {
         error?: string;
       } = await res.json();
 
-      // ---- Handle generation_failed from n8n error workflow ----
+      // ---- NEW: Handle generation_failed from n8n error workflow ----
       if (data.status === "generation_failed") {
-        setProjectError(projectId, data.error || "Generation failed. Please try again.");
+        setGenErrors(prev => ({ ...prev, [projectId]: data.error || "Generation failed. Please try again." }));
         setStatus("idle");
         stopLoadingTimer();
         const pid = activeGenerationProjectIdRef.current;
@@ -1111,7 +1096,6 @@ export default function AppPage() {
           setSendingProjects(prev => { const n = { ...prev }; delete n[pid]; return n; });
         }
         activeGenerationProjectIdRef.current = null;
-        // Ensure the loading state is cleared for this project
         return;
       }
 
@@ -1120,7 +1104,6 @@ export default function AppPage() {
         activeGenerationProjectIdRef.current = projectId;
         setStatus("running");
         addSystemMessage("Creating concepts...");
-        // No timeout – n8n will send generation_failed or generation_complete via callback
         return;
       }
       if (data.trigger_modal === "signup_required") {
@@ -1142,7 +1125,6 @@ export default function AppPage() {
             .eq("project_id", projectId);
           console.log("[DB] Reset status to idle (signup required)");
         } catch (dbErr) { /* ignore */ }
-        // Reset local generation state as well
         setStatus('idle');
         stopLoadingTimer();
         const pid = activeGenerationProjectIdRef.current;
@@ -1229,8 +1211,8 @@ export default function AppPage() {
         });
         setSendingProjects(prev => { const n = {...prev}; delete n[projectId!]; return n; });
         activeGenerationProjectIdRef.current = null;
-        // Clear any errors for this project on success
-        clearProjectError(projectId);
+        // Clear error for this project if any
+        setGenErrors(prev => { const n = { ...prev }; delete n[projectId]; return n; });
       }
       if (data.creditsRemaining !== undefined) {
         setCredits(data.creditsRemaining);
@@ -1240,7 +1222,7 @@ export default function AppPage() {
       if (wasGenerating) {
         console.warn("Connection dropped mid-generation:", err?.message);
       } else {
-        setProjectError(projectId, "Failed to reach designer. Please try again.");
+        setGenErrors(prev => ({ ...prev, [projectId]: "Failed to reach designer. Please try again." }));
         setStatus('idle');
         stopLoadingTimer();
         // Reset status on fetch error
@@ -1276,6 +1258,8 @@ export default function AppPage() {
         }
         if (projectId) setSendingProjects(prev => { const n = {...prev}; delete n[projectId!]; return n; });
         activeGenerationProjectIdRef.current = null;
+        // Clear error for this project (if any)
+        setGenErrors(prev => { const n = { ...prev }; delete n[projectId]; return n; });
         setTimeout(() => inputRef.current?.focus(), 0);
       } else {
         console.log("[DB] Skipped reset – generation handed off to Realtime");
