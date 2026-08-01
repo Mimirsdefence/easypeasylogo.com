@@ -26,13 +26,8 @@ export async function loginWithGoogle(): Promise<User> {
     return mapSupabaseUser(userData.user);
   }
 
-  return {
-    user_id: '',
-    email: '',
-    isAuthenticated: false,
-    newsletterOptIn: false,
-    created_at: new Date().toISOString()
-  };
+  // 🔥 FIX: Throw an error instead of returning an empty user
+  throw new Error("Google sign-in incomplete. Please try again.");
 }
 
 export async function loginWithEmail(email: string, password: string): Promise<User> {
