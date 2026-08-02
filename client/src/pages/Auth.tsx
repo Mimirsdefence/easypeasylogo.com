@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/state/AuthContext";
 import { useUser } from "@/state/UserContext";
@@ -52,6 +52,8 @@ export default function Auth(props: {
   
   const [error, setError] = useState<string | null>(null);
 
+  const googleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (embedded) return;
     if (window.location.search.includes("signup") || window.location.search.includes("create")) {
@@ -61,9 +63,13 @@ export default function Auth(props: {
     }
   }, [window.location.search, embedded]);
 
-  // ✅ Cleanup: reset loading states when leaving the page (e.g., pressing back)
+  // Cleanup: reset loading states and clear timeout on unmount
   useEffect(() => {
     return () => {
+      if (googleTimeoutRef.current) {
+        clearTimeout(googleTimeoutRef.current);
+        googleTimeoutRef.current = null;
+      }
       setGoogleLoading(false);
       setEmailLoading(false);
       setError(null);
@@ -109,8 +115,18 @@ export default function Auth(props: {
       }
       setGoogleLoading(true);
       setError(null);
-      await loginWithGoogle(); // just opens the popup
-      // The page redirects to /auth-return after Google completes
+      
+      await loginWithGoogle();
+      
+      // Clear any existing timeout
+      if (googleTimeoutRef.current) clearTimeout(googleTimeoutRef.current);
+      
+      // Set a timeout to reset loading after 10 seconds if not redirected
+      googleTimeoutRef.current = setTimeout(() => {
+        setGoogleLoading(false);
+        googleTimeoutRef.current = null;
+      }, 10000);
+      
     } catch (err) {
       setError("Failed to sign in with Google. Please try again.");
       setGoogleLoading(false);
