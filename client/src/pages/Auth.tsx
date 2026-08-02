@@ -61,6 +61,15 @@ export default function Auth(props: {
     }
   }, [window.location.search, embedded]);
 
+  // ✅ Cleanup: reset loading states when leaving the page (e.g., pressing back)
+  useEffect(() => {
+    return () => {
+      setGoogleLoading(false);
+      setEmailLoading(false);
+      setError(null);
+    };
+  }, []);
+
   const handleEmailChange = (val: string) => {
     setEmail(val);
     setError(null);
