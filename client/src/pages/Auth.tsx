@@ -25,20 +25,20 @@ export default function Auth(props: {
   const [, setLocation] = useLocation();
   const { setAuth } = useAuth();
   const { setUser } = useUser();
-  
+
   const searchParams = new URLSearchParams(window.location.search);
   const initialMode = defaultMode || (searchParams.get('mode') === 'create' || window.location.search.includes("signup") ? 'signup' : 'login');
-  
+
   const [mode, setMode] = useState<'login' | 'signup' | 'verify-email'>(initialMode as any);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [newsletterOptIn, setNewsletterOptIn] = useState(true);
-  
+
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
-  
+
   const [emailError, setEmailError] = useState("");
   const [passwordRules, setPasswordRules] = useState({
     length: false,
@@ -49,7 +49,7 @@ export default function Auth(props: {
   });
   const [isTypingPassword, setIsTypingPassword] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  
+
   const [error, setError] = useState<string | null>(null);
 
   const googleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -115,18 +115,18 @@ export default function Auth(props: {
       }
       setGoogleLoading(true);
       setError(null);
-      
+
       await loginWithGoogle();
-      
+
       // Clear any existing timeout
       if (googleTimeoutRef.current) clearTimeout(googleTimeoutRef.current);
-      
-      // Set a timeout to reset loading after 10 seconds if not redirected
+
+      // Reset loading after 3 seconds if not redirected
       googleTimeoutRef.current = setTimeout(() => {
         setGoogleLoading(false);
         googleTimeoutRef.current = null;
-      }, 10000);
-      
+      }, 3000);
+
     } catch (err) {
       setError("Failed to sign in with Google. Please try again.");
       setGoogleLoading(false);
@@ -153,14 +153,14 @@ export default function Auth(props: {
         return;
       }
     }
-    
+
     try {
       setEmailLoading(true);
       setError(null);
       const user = mode === 'signup'
         ? await signUpWithEmail(email, password)
         : await loginWithEmail(email, password);
-      
+
       if (mode === 'signup') {
         if (newsletterOptIn) {
           await supabase.from("newsletter_subscribers").insert({
