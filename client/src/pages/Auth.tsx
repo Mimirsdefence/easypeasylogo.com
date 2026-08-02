@@ -100,11 +100,10 @@ export default function Auth(props: {
       }
       setGoogleLoading(true);
       setError(null);
-      const user = await loginWithGoogle();
-      handleAuthSuccess(user);
+      await loginWithGoogle(); // just opens the popup
+      // The page redirects to /auth-return after Google completes
     } catch (err) {
       setError("Failed to sign in with Google. Please try again.");
-    } finally {
       setGoogleLoading(false);
     }
   };

@@ -11,8 +11,8 @@ function mapSupabaseUser(supaUser: any): User {
   };
 }
 
-export async function loginWithGoogle(): Promise<User> {
-  const { data, error } = await supabase.auth.signInWithOAuth({
+export async function loginWithGoogle(): Promise<void> {
+  const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo: "https://easypeasylogo.com/auth-return"
@@ -20,14 +20,7 @@ export async function loginWithGoogle(): Promise<User> {
   });
 
   if (error) throw error;
-
-  const { data: userData } = await supabase.auth.getUser();
-  if (userData?.user) {
-    return mapSupabaseUser(userData.user);
-  }
-
-  // 🔥 FIX: Throw an error instead of returning an empty user
-  throw new Error("Google sign-in incomplete. Please try again.");
+  // No getUser() check – the session is handled in AuthReturn
 }
 
 export async function loginWithEmail(email: string, password: string): Promise<User> {
