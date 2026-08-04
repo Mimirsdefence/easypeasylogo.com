@@ -76,6 +76,16 @@ export default function Auth(props: {
     };
   }, []);
 
+  // 🔥 NEW: Switch mode and clear form fields
+  const switchMode = (newMode: 'login' | 'signup') => {
+    setMode(newMode);
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setError(null);
+    setIsTypingPassword(false);
+  };
+
   const handleEmailChange = (val: string) => {
     setEmail(val);
     setError(null);
@@ -118,10 +128,7 @@ export default function Auth(props: {
 
       await loginWithGoogle();
 
-      // Clear any existing timeout
       if (googleTimeoutRef.current) clearTimeout(googleTimeoutRef.current);
-
-      // Reset loading after 3 seconds if not redirected
       googleTimeoutRef.current = setTimeout(() => {
         setGoogleLoading(false);
         googleTimeoutRef.current = null;
@@ -212,10 +219,7 @@ export default function Auth(props: {
     );
   };
 
-  // 🔹 SEO: If embedded in modal, skip meta (the page itself is not indexed separately)
-  if (!embedded) {
-    // This runs only on the standalone Auth page (which is indexable)
-  }
+  if (!embedded) { /* SEO meta is handled elsewhere */ }
 
   if (mode === 'verify-email') {
     return (
@@ -439,7 +443,7 @@ export default function Auth(props: {
                   New here?{" "}
                   <button 
                     type="button"
-                    onClick={() => setMode("signup")} 
+                    onClick={() => switchMode("signup")} 
                     className="text-purple-400 hover:text-purple-300 transition font-medium"
                   >
                     Create your account
@@ -450,7 +454,7 @@ export default function Auth(props: {
                   Already have an account?{" "}
                   <button 
                     type="button"
-                    onClick={() => setMode("login")} 
+                    onClick={() => switchMode("login")} 
                     className="text-purple-400 hover:text-purple-300 transition font-medium"
                   >
                     Sign in
