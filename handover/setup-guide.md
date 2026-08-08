@@ -67,7 +67,7 @@
 
 ## Cloudinary (Insert in Vercel and N8N)
 
-**⚠️ Important:** Before importing the n8n workflow, you must install the Cloudinary node from the n8n marketplace. Go to **Settings → Community Nodes → Install** and search for "Cloudinary". Install it first, then import the workflow JSON.
+**⚠️ Important:** Before importing the n8n workflow, you must install the Cloudinary node from the n8n marketplace. Go to **Settings → Community Nodes → Install** and search for "Cloudinary". Install it first, then import the workflow JSON. Or install it by searching for name as A node in A workflow and it will say "install".
 
 | Step | Action |
 |------|--------|
@@ -176,9 +176,14 @@ This is used for session encryption. Just generate a random string and paste it 
 | File | Purpose |
 |------|---------|
 | `ReadMe.txt` | Full documentation |
-| `n8n-workflow.json` | The AI designer workflow – import directly into n8n |
+| `n8n-workflow.json` | **Main** AI designer workflow – import directly into n8n |
+| `error-trigger.json` | ⚠️ **Error handler workflow** – MUST import this too! |
 | `docker-compose.yml` | Pre‑configured n8n setup (concurrency 20) |
 | `setup-api-keys.mp4` | Short video showing where to insert all API keys |
+
+> ⚠️ **Important:** The `error-trigger.json` workflow is essential. It catches failures in the main workflow and sends error messages back to the frontend. If you miss this, users will see infinite loading dots when generation fails.
+> *// Missed this in the setup video – remember to do this!*
+> *// Simply add the error workflow in n8n.*
 
 ---
 
@@ -188,7 +193,7 @@ This is used for session encryption. Just generate a random string and paste it 
 |------|-------|
 | Google Cloud VM running (static IP) | 🔲 |
 | n8n installed via Docker | 🔲 |
-| n8n workflow imported | 🔲 |
+| **Both n8n workflows imported (main + error trigger)** | 🔲 |
 | All API keys inserted in n8n | 🔲 |
 | Supabase project received (SQL already applied) | 🔲 |
 | Google OAuth set up | 🔲 |

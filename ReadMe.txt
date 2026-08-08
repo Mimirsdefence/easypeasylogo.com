@@ -87,7 +87,7 @@ You have **two options** to get this system live:
   - Upstash Redis, Cloudinary, and kie.ai accounts (or you provide API keys and I insert them).
   - Stripe (Live) – webhooks, products, price IDs – connected to your account.
   - Vercel deployment with all environment variables.
-  - n8n on your VM (import workflow, set concurrency).
+  - n8n on your VM (import both workflows, set concurrency).
   - Domain transfer to your NameCheap account.
   - Full verification – you receive a completely working system.
 
@@ -98,10 +98,11 @@ With a brand new Gmail account, you are eligible for **$300 in free Google Cloud
 - You create your own accounts for each service.
 - I provide you with **everything you need**:
   - Complete source code (this repository).
-  - n8n workflow JSON (ready to import).
+  - **Two n8n workflow JSON files** (main + error trigger) – ready to import.
   - `docker-compose.yml` template (concurrency 20).
   - Full list of environment variables (see below).
   - Step‑by‑step setup guide in the `handover/` folder.
+
 - You are responsible for setting up your VM, n8n, and DNS records.
 
 
@@ -137,7 +138,7 @@ Item	Format
 Domain (easypeasylogo.com)	Transferred to your NameCheap account (full ownership).
 Stripe configuration	Fully configured – webhooks, products, price IDs – all done. You only update your bank details.
 Supabase	The whole project is transferred to your account – you don't need to run any SQL.
-n8n workflow	JSON export – import directly into your n8n instance.
+n8n workflows	Two JSON exports – main designer workflow and error trigger workflow. Import both into your n8n instance.
 docker‑compose.yml	Pre‑configured with concurrency 20 and Redis placeholders.
 Full source code	React + Node.js – deploy to Vercel with one click.
 Environment variable template	All keys and values explained – just fill in your own API credentials.
@@ -148,7 +149,8 @@ easy-peasy-logo/
 ├── client/                 # React frontend (Vite + Tailwind)
 ├── api/                    # Vercel serverless functions
 ├── handover/               # ⭐ Everything you need to get started
-│   ├── n8n-workflow.json   # The designer-chat workflow (import this)
+│   ├── n8n-workflow.json   # Main designer‑chat workflow (import this)
+│   ├── error-trigger.json  # ⚠️ Error handler workflow – MUST import this too!
 │   ├── docker-compose.yml  # Pre‑configured with concurrency 20
 │   ├── setup-guide.md      # Detailed step‑by‑step instructions
 │   └── setup-api-keys.mp4  # Video showing where to insert all API keys
@@ -156,6 +158,12 @@ easy-peasy-logo/
 ├── scripts/                # Build and helper scripts
 ├── ReadMe.txt              # This file
 └── ... other config files
+⚠️ Important: The error-trigger.json workflow is essential.
+It catches failures in the main workflow and sends error messages back to the frontend.
+If you miss this, users will see infinite loading dots when generation fails.
+// Missed this in the setup video – remember to do this!
+// Simply add the error workflow in n8n.
+
 Before You Start
 You are responsible for monthly costs of the services (VM, Supabase, etc.).
 
@@ -174,6 +182,8 @@ Prepare your accounts – see the handover/ setup guide for details.
 
 Follow the setup guide – it contains step‑by‑step instructions and a video.
 
+Import both n8n workflows – the main one and the error trigger.
+
 Update your Stripe bank details (live payouts) and domain DNS records.
 
 Start selling.
@@ -182,6 +192,7 @@ Support
 Option A – everything is taken care of.
 
 Option B – the handover/ folder contains detailed guides.
+
 If you need extra help, I offer paid support at an hourly rate.
 
 Good luck with your new business!
