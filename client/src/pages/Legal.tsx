@@ -41,7 +41,7 @@ export default function Legal() {
 
           <div className="text-center">
             <h1 className="text-4xl font-bold tracking-tight mb-2" data-testid="text-legal-page-title">Legal</h1>
-            <p className="text-muted-foreground text-sm">EasyPeasyLogo is operated by EasyPeasyLogo, based in Sweden. Contact: support@easypeasylogo.com</p>
+            <p className="text-muted-foreground text-sm">EasyPeasyLogo is operated by EasyPeasyLogo, based in Sweden. Contact: easypeasylogo@gmail.com</p>
           </div>
 
           {/* TERMS OF SERVICE */}
@@ -83,6 +83,9 @@ export default function Legal() {
 
               <h3 className="text-lg font-semibold text-foreground pt-4">Termination</h3>
               <p>EasyPeasyLogo may suspend or terminate access at any time for security, legal, or operational reasons.</p>
+
+              <h3 className="text-lg font-semibold text-foreground pt-4">Governing Law</h3>
+              <p>These Terms shall be governed by and construed in accordance with the laws of Sweden. Any disputes arising out of or in connection with these Terms shall be subject to the exclusive jurisdiction of the courts of Sweden.</p>
             </div>
           </section>
 
@@ -100,7 +103,7 @@ export default function Legal() {
 
               <h3 className="text-lg font-semibold text-foreground pt-4">Data Protection</h3>
               <p>We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction.</p>
-              <p>For questions about your data or to request deletion, contact us at support@easypeasylogo.com.</p>
+              <p>For questions about your data or to request deletion, contact us at easypeasylogo@gmail.com.</p>
             </div>
           </section>
 
@@ -111,7 +114,7 @@ export default function Legal() {
               <p>Revisions purchased on EasyPeasyLogo are digital goods. No refunds are issued after revisions have been added to your account.</p>
               <p>Failed concepts are never charged.</p>
               <p>By purchasing revisions, you agree to immediate delivery of digital content and waive statutory withdrawal rights to the extent permitted by applicable law (including EU consumer protection regulations for digital goods).</p>
-              <p>If you experience a technical issue that prevents you from using purchased revisions, please contact support@easypeasylogo.com and we will investigate on a case-by-case basis.</p>
+              <p>If you experience a technical issue that prevents you from using purchased revisions, please contact easypeasylogo@gmail.com and we will investigate on a case-by-case basis.</p>
             </div>
           </section>
 
