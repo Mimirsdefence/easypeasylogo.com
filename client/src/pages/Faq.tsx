@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "wouter";
 import TopBar from "@/components/TopBar";
@@ -20,7 +20,7 @@ const FAQ_DATA = [
   },
   {
     question: "4. What files do I receive?",
-    answer: "You receive high-resolution visuals, including 4K exports and master design files ready for professional use."
+    answer: "You receive high-resolution visuals and master design files ready for professional use."
   },
   {
     question: "5. Are designs optimized for YouTube, Facebook and websites?",
@@ -138,6 +138,11 @@ function FaqCard({ question, answer, index }: { question: string; answer: string
 }
 
 export default function Faq() {
+  // Force scroll to top when the page loads
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <>
       <Helmet>
