@@ -2,7 +2,6 @@ import { useAuth } from "@/state/AuthContext";
 import { useGeneration } from "@/state/GenerationContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { useLocation } from "wouter";
 import { ChevronLeft, Search, Download, X } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -48,11 +47,12 @@ function groupImagesByRow(images: GeneratedImage[]) {
   });
 
   map.forEach((entry, rowId) => {
-    if (entry.concept1) {
+    // Keep the group if at least one concept exists
+    if (entry.concept1 || entry.concept2) {
       groups.push({
         rowId,
-        concept1: entry.concept1,
-        concept2: entry.concept2 || null,
+        concept1: entry.concept1 || entry.concept2!, // fallback so concept1 is never null
+        concept2: entry.concept1 ? entry.concept2 : null,
       });
     }
   });
@@ -74,19 +74,27 @@ export default function Gallery() {
   const [frontImageMap, setFrontImageMap] = useState<Record<string, "concept1" | "concept2">>({});
   const [hovered, setHovered] = useState<Record<string, { front: boolean; back: boolean }>>({});
 
-  const filteredImages = useMemo(() => {
-    const term = search.toLowerCase();
-    return generationState.generatedImages.filter(img => {
-      const matchesSearch = !term ||
-        (img.title?.toLowerCase().includes(term)) ||
-        img.url.toLowerCase().includes(term);
-      return matchesSearch;
+  // Filter at group level so searching for Concept 2 title still shows the group
+  const filteredGroups = useMemo(() => {
+    const term = search.toLowerCase().trim();
+    const allGroups = groupImagesByRow(generationState.generatedImages);
+
+    if (!term) return allGroups;
+
+    return allGroups.filter((group) => {
+      const title1 = group.concept1?.title?.toLowerCase() || "";
+      const title2 = group.concept2?.title?.toLowerCase() || "";
+      const url1 = group.concept1?.url?.toLowerCase() || "";
+      const url2 = group.concept2?.url?.toLowerCase() || "";
+
+      return (
+        title1.includes(term) ||
+        title2.includes(term) ||
+        url1.includes(term) ||
+        url2.includes(term)
+      );
     });
   }, [generationState.generatedImages, search]);
-
-  const filteredGroups = useMemo(() => {
-    return groupImagesByRow(filteredImages);
-  }, [filteredImages]);
 
   const handleDelete = async () => {
     if (!groupToDelete || !authState.isAuthenticated) {
@@ -221,9 +229,24 @@ export default function Gallery() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-16 gap-y-8">
             {filteredGroups.map((group) => {
               const rowId = group.rowId;
-              const frontKey = frontImageMap[rowId] || "concept1";
-              const frontImg = frontKey === "concept1" ? group.concept1 : group.concept2;
-              const backImg = frontKey === "concept1" ? group.concept2 : group.concept1;
+
+              // Safe front/back selection – never crash if one is missing
+              const preferredFront = frontImageMap[rowId] || "concept1";
+              let frontImg: GeneratedImage;
+              let backImg: GeneratedImage | null = null;
+
+              if (preferredFront === "concept1" && group.concept1) {
+                frontImg = group.concept1;
+                backImg = group.concept2;
+              } else if (preferredFront === "concept2" && group.concept2) {
+                frontImg = group.concept2;
+                backImg = group.concept1;
+              } else {
+                // Fallback if preferred one is missing after filtering
+                frontImg = group.concept1 || group.concept2!;
+                backImg = group.concept1 && group.concept2 ? (frontImg === group.concept1 ? group.concept2 : group.concept1) : null;
+              }
+
               const isFrontHovered = hovered[rowId]?.front || false;
               const isBackHovered = hovered[rowId]?.back || false;
 
@@ -236,7 +259,7 @@ export default function Gallery() {
                   className="group"
                 >
                   <div className="relative aspect-square">
-                    {/* BACK IMAGE – scale same as front, slide further right on hover */}
+                    {/* BACK IMAGE */}
                     {backImg && (
                       <div
                         className="absolute inset-0 transition-all duration-300 z-0"
@@ -257,7 +280,7 @@ export default function Gallery() {
                       </div>
                     )}
 
-                    {/* FRONT IMAGE + OVERLAY + BUTTONS – scale 1.05 on hover */}
+                    {/* FRONT IMAGE + OVERLAY + BUTTONS */}
                     <div
                       className="absolute inset-0 transition-transform duration-300 z-10 cursor-pointer"
                       style={{
@@ -309,14 +332,14 @@ export default function Gallery() {
                     </div>
                   </div>
 
-                  {/* Titles – clickable, mt-4 */}
+                  {/* Titles – clickable */}
                   <div className="mt-4 px-1 flex flex-col gap-0.5">
                     <div
                       className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                       onClick={() => toggleFrontImage(rowId, "concept1")}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${frontKey === "concept1" ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                      <span className={`text-xs font-medium ${frontKey === "concept1" ? "text-primary" : "text-muted-foreground/60"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${frontImg === group.concept1 ? "bg-primary" : "bg-muted-foreground/30"}`} />
+                      <span className={`text-xs font-medium ${frontImg === group.concept1 ? "text-primary" : "text-muted-foreground/60"}`}>
                         {group.concept1.title || "Concept 1"}
                       </span>
                     </div>
@@ -325,8 +348,8 @@ export default function Gallery() {
                         className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => toggleFrontImage(rowId, "concept2")}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${frontKey === "concept2" ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                        <span className={`text-xs font-medium ${frontKey === "concept2" ? "text-primary" : "text-muted-foreground/60"}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${frontImg === group.concept2 ? "bg-primary" : "bg-muted-foreground/30"}`} />
+                        <span className={`text-xs font-medium ${frontImg === group.concept2 ? "text-primary" : "text-muted-foreground/60"}`}>
                           {group.concept2.title || "Concept 2"}
                         </span>
                       </div>
