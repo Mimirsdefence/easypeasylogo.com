@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/state/AuthContext";
@@ -335,6 +335,28 @@ export default function Home() {
     ]
   };
 
+  // ---- 3D MOUSE TILT VALUES ----
+  const cardRef = useRef<HTMLDivElement>(null);
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+  const rotateX = useTransform(mouseY, [-150, 150], [6, -6]);
+  const rotateY = useTransform(mouseX, [-150, 150], [-6, 6]);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const mouseXPos = e.clientX - centerX;
+    const mouseYPos = e.clientY - centerY;
+    mouseX.set(mouseXPos);
+    mouseY.set(mouseYPos);
+  };
+
+  const handleMouseLeave = () => {
+    mouseX.set(0);
+    mouseY.set(0);
+  };
+
   return (
     <>
       <Helmet>
@@ -470,9 +492,24 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---- HOW IT WORKS (Premium Card - Exact grey section boundaries, no grey bg) ---- */}
+        {/* ---- HOW IT WORKS (Clean Premium: breathing room, entrance animation, depth shadow, 3D mouse tilt) ---- */}
         <section className="relative px-4 overflow-hidden">
-          <div className="relative z-10 max-w-6xl mx-auto rounded-3xl border border-white hover:border-primary/60 hover:shadow-[0_0_50px_rgba(124,58,237,0.35)] transition-all duration-300 py-24">
+          <motion.div
+            ref={cardRef}
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            whileHover={{ scale: 1.02 }}
+            style={{
+              rotateX: rotateX,
+              rotateY: rotateY,
+              transformPerspective: 800,
+            }}
+            className="relative z-10 max-w-6xl mx-auto rounded-3xl border border-white hover:border-primary/60 hover:shadow-[0_0_50px_rgba(124,58,237,0.35)] transition-all duration-300 pt-32 pb-24 shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
+          >
             <motion.h2 
               initial={{ opacity: 0, y: -80 }} 
               whileInView={{ opacity: 1, y: 0 }} 
@@ -495,7 +532,7 @@ export default function Home() {
                 />
               ))}
             </div>
-          </div>
+          </motion.div>
         </section>
 
         {/* ---- LOVED BY FOUNDERS (testimonials) ---- */}
