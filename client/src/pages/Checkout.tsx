@@ -34,6 +34,22 @@ export default function Checkout() {
     checkPurchaseStatus();
   }, []);
 
+  // ✅ FIX: Clear loading state when component mounts
+  useEffect(() => {
+    setLoadingPriceId(null);
+  }, []);
+
+  // ✅ FIX: Clear loading state when user returns to the tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        setLoadingPriceId(null);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
   const [topUpQuantities, setTopUpQuantities] = useState({
     100: 1,
     500: 1,
@@ -56,16 +72,15 @@ export default function Checkout() {
         return;
       }
 
-      // Determine amount based on priceId (new Live IDs)
       let amount = 100; // default for starter or 5-revision pack
       if (isStarter) {
         amount = 100;
-      } else if (priceId === 'price_1TvG7j0IfYdAlbaaANQOBR0F') { // 50 revisions
+      } else if (priceId === 'price_1TvG7j0IfYdAlbaaANQOBR0F') {
         amount = 1000;
-      } else if (priceId === 'price_1TvG7l0IfYdAlbaawtqWABhv') { // 25 revisions
+      } else if (priceId === 'price_1TvG7l0IfYdAlbaawtqWABhv') {
         amount = 500;
       } else {
-        amount = 100; // 5 revisions or others
+        amount = 100;
       }
 
       const quantity = isStarter ? 1 : topUpQuantities[amount as keyof typeof topUpQuantities];
@@ -104,7 +119,7 @@ export default function Checkout() {
       displayRevisions: 5,
       displayConcepts: 10,
       desc: "Quick fuel for your next 10 concepts.",
-      priceId: "price_1TvG7o0IfYdAlbaaq4hLeJYL"  // ✅ Live ID
+      priceId: "price_1TvG7o0IfYdAlbaaq4hLeJYL"
     },
     {
       amount: 500,
@@ -113,7 +128,7 @@ export default function Checkout() {
       displayRevisions: 25,
       displayConcepts: 50,
       desc: "Perfect for ongoing design projects (50 concepts).",
-      priceId: "price_1TvG7l0IfYdAlbaawtqWABhv"  // ✅ Live ID
+      priceId: "price_1TvG7l0IfYdAlbaawtqWABhv"
     },
     {
       amount: 1000,
@@ -122,7 +137,7 @@ export default function Checkout() {
       displayRevisions: 50,
       displayConcepts: 100,
       desc: "Built for serious creative runs (100 concepts).",
-      priceId: "price_1TvG7j0IfYdAlbaaANQOBR0F"  // ✅ Live ID
+      priceId: "price_1TvG7j0IfYdAlbaaANQOBR0F"
     }
   ];
 
@@ -179,14 +194,14 @@ export default function Checkout() {
                       <p className="text-muted-foreground text-sm mb-1">Shape your identity with your first professional revisions.</p>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
-                      {/* 🔥 NEW ORANGE BADGE */}
-                      <Badge className="bg-[#f97316] text-white text-[10px] shadow-[0_0_20px_rgba(249,115,22,0.7)] hover:shadow-[0_0_30px_rgba(249,115,22,0.9)] transition-all duration-300">
+                      {/* 🔥 NEW PURPLE BADGE WITH GLOW */}
+                      <Badge className="bg-[#5B21B6] text-white text-[10px] shadow-[0_0_30px_rgba(124,58,237,0.8)] hover:shadow-[0_0_40px_rgba(124,58,237,0.9)] transition-all duration-300 border border-white/20">
                         🔥 30% OFF – FIRST TIME BUYER
                       </Badge>
-                      {/* 🔥 NEW PRICE DISPLAY */}
+                      {/* 🔥 PRICE IN WHITE WITH SUBTLE PURPLE GLOW */}
                       <div className="flex items-center gap-2">
-                        <span className="text-2xl font-bold text-[#f97316]">$5.25</span>
-                        <span className="text-sm text-muted-foreground line-through">$7.49</span>
+                        <span className="text-2xl font-bold text-white [text-shadow:0_0_20px_rgba(124,58,237,0.6)]">$5.25</span>
+                        <span className="text-sm text-white/50 line-through">$7.49</span>
                       </div>
                     </div>
                   </div>
@@ -305,12 +320,12 @@ export default function Checkout() {
             >
               {[
                 {
-                  price: "$13.99",   // updated price
+                  price: "$13.99",
                   credits: 200,
                   label: "Pro",
                   badge: "Recommended",
                   bonusLabel: "+5 BONUS REVISIONS FIRST MONTH",
-                  priceId: "price_1TvG7p0IfYdAlbaatlAQEsF7", // ✅ Live ID
+                  priceId: "price_1TvG7p0IfYdAlbaatlAQEsF7",
                   features: [
                     "10 Monthly Revisions",
                     "Total of 20 Monthly Unique Concepts (2 per revision)",
@@ -320,12 +335,12 @@ export default function Checkout() {
                   ]
                 },
                 {
-                  price: "$27.00",   // updated price
+                  price: "$27.00",
                   credits: 600,
                   label: "Studio",
                   badge: "Launch Bonus",
                   bonusLabel: "+10 BONUS REVISIONS FIRST MONTH",
-                  priceId: "price_1TvG7p0IfYdAlbaartzEYmnh", // ✅ Live ID
+                  priceId: "price_1TvG7p0IfYdAlbaartzEYmnh",
                   featured: true,
                   includes: "Everything in Pro +",
                   features: [
@@ -338,12 +353,12 @@ export default function Checkout() {
                   ]
                 },
                 {
-                  price: "$49.99",   // updated price
+                  price: "$49.99",
                   credits: 1200,
                   label: "Enterprise",
                   badge: "Premium Tier",
                   bonusLabel: "+15 BONUS REVISIONS FIRST MONTH",
-                  priceId: "price_1TvG7j0IfYdAlbaaVeUVBov0", // ✅ Live ID
+                  priceId: "price_1TvG7j0IfYdAlbaaVeUVBov0",
                   includes: "Everything in Studio +",
                   features: [
                     "60 Monthly Revisions",
