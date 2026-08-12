@@ -179,8 +179,15 @@ export default function Checkout() {
                       <p className="text-muted-foreground text-sm mb-1">Shape your identity with your first professional revisions.</p>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
-                      <div className="text-2xl font-bold">$9.99</div>
-                      <Badge className="bg-[#5B21B6] text-white text-[10px] shadow-[0_0_10px_rgba(124,58,237,0.5)]">5 Revisions • 10 Concepts</Badge>
+                      {/* 🔥 NEW ORANGE BADGE */}
+                      <Badge className="bg-[#f97316] text-white text-[10px] shadow-[0_0_20px_rgba(249,115,22,0.7)] hover:shadow-[0_0_30px_rgba(249,115,22,0.9)] transition-all duration-300">
+                        🔥 30% OFF – FIRST TIME BUYER
+                      </Badge>
+                      {/* 🔥 NEW PRICE DISPLAY */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl font-bold text-[#f97316]">$5.25</span>
+                        <span className="text-sm text-muted-foreground line-through">$7.49</span>
+                      </div>
                     </div>
                   </div>
                   <ul className="space-y-1.5 pt-1">
@@ -198,12 +205,12 @@ export default function Checkout() {
                     </li>
                   </ul>
                   <Button
-                    onClick={() => handlePurchase("price_1TvG7n0IfYdAlbaaeFio0fDS", true)} // ✅ Live ID
+                    onClick={() => handlePurchase("price_1U3Umf0IfYdAlbaaTjRtd4JZ", true)}
                     disabled={loadingPriceId !== null}
                     className="w-full bg-gradient-to-r from-[#5B21B6] via-[#6D28D9] to-[#7C3AED] text-white font-bold hover:scale-105 transition-all duration-200 hover:shadow-[0_0_22px_rgba(124,58,237,0.6)] active:scale-95 hover:ring-purple-500/40 rounded-xl"
                     data-testid="button-purchase-starter"
                   >
-                    {loadingPriceId === "price_1TvG7n0IfYdAlbaaeFio0fDS" ? (
+                    {loadingPriceId === "price_1U3Umf0IfYdAlbaaTjRtd4JZ" ? (
                       <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Connecting to Stripe...</>
                     ) : "Get Starter Pack"}
                   </Button>
