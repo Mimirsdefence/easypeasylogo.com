@@ -335,9 +335,10 @@ export default function Home() {
     ]
   };
 
-  // ---- CLICK-DRAG 3D TILT (replaces hover tilt) ----
+  // ---- CLICK-DRAG 3D TILT (with scale fix) ----
   const cardRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isHovering, setIsHovering] = useState(false);
   const [rotationX, setRotationX] = useState(0);
   const [rotationY, setRotationY] = useState(0);
   const [startMouseX, setStartMouseX] = useState(0);
@@ -357,7 +358,6 @@ export default function Home() {
     if (!isDragging) return;
     const deltaX = e.clientX - startMouseX;
     const deltaY = e.clientY - startMouseY;
-    // Keep the same 6° range as before
     const newRotY = Math.max(-6, Math.min(6, startRotY + deltaX * 0.1));
     const newRotX = Math.max(-6, Math.min(6, startRotX - deltaY * 0.1));
     setRotationX(newRotX);
@@ -380,6 +380,9 @@ export default function Home() {
       setRotationY(0);
     }
   };
+
+  // Compute scale: 1 when dragging, 1.02 when hovering (not dragging), else 1
+  const cardScale = isDragging ? 1 : (isHovering ? 1.02 : 1);
 
   return (
     <>
@@ -516,7 +519,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---- HOW IT WORKS (Clean Premium: breathing room, entrance animation, depth shadow, click-drag 3D tilt) ---- */}
+        {/* ---- HOW IT WORKS (Clean Premium: click-drag 3D tilt, scale on hover, but scale off during drag) ---- */}
         <section 
           className="relative px-4 overflow-hidden"
           onMouseLeave={handleSectionMouseLeave}
@@ -531,7 +534,9 @@ export default function Home() {
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            whileHover={{ scale: 1.02 }}
+            onMouseEnter={() => setIsHovering(true)}
+            onMouseLeave={() => setIsHovering(false)}
+            animate={{ scale: cardScale }}
             style={{
               rotateX: rotationX,
               rotateY: rotationY,
