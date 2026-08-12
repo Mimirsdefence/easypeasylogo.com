@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
-import { ChevronLeft, LogOut, CreditCard, Shield, User, AlertTriangle } from "lucide-react";
+import { ChevronLeft, LogOut, CreditCard, Shield, User, AlertTriangle, Loader2 } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import { logout } from "@/lib/auth";
 import { motion } from "framer-motion";
@@ -36,6 +36,8 @@ export default function Profile() {
   const [portalError, setPortalError] = useState<string | null>(null);
   const [cancelAt, setCancelAt] = useState<string | null | undefined>(undefined);
   const [hasSubscription, setHasSubscription] = useState<boolean | undefined>(undefined);
+  // ✅ NEW: loading state for logout
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   if (!authState.isAuthenticated) {
     setLocation("/auth");
@@ -43,10 +45,16 @@ export default function Profile() {
   }
 
   const handleLogout = async () => {
-    await logout();
-    setAuth(false);
-    setUser(null);
-    setLocation("/");
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      setAuth(false);
+      setUser(null);
+      setLocation("/");
+    } catch (error) {
+      console.error("Logout error:", error);
+      setIsLoggingOut(false); // reset on error so user can retry
+    }
   };
 
   const handleBillingPortal = async () => {
@@ -161,9 +169,13 @@ export default function Profile() {
                 className="w-full mt-4 border-[#7C3AED]/20 hover:border-[#7C3AED]/50 font-bold transition-colors duration-200 rounded-xl" 
                 variant="outline"
                 onClick={handleLogout}
+                disabled={isLoggingOut}
               >
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
+                {isLoggingOut ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Logging out...</>
+                ) : (
+                  <><LogOut className="mr-2 h-4 w-4" /> Logout</>
+                )}
               </Button>
             </div>
           </motion.div>

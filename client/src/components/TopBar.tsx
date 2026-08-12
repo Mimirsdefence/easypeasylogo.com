@@ -6,9 +6,9 @@ import { logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, User as UserIcon, Loader2 } from "lucide-react";
 import logoIcon from "@assets/logo.webp";
-import React from "react";
+import React, { useState } from "react";
 
 type TopBarProps = {
   creditButtonRef?: React.RefObject<HTMLButtonElement>;
@@ -19,18 +19,21 @@ export default function TopBar({ creditButtonRef }: TopBarProps = {}) {
   const { state: authState, setAuth } = useAuth();
   const { state: userState, setUser } = useUser();
   const { state: creditsState } = useCredits();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    await logout();
-    setAuth(false);
-    setUser(null);
-
-    // --- CLEAR GUEST SESSION DATA ---
-    localStorage.removeItem("easypeasy_session_id");
-    localStorage.removeItem("easypeasy_session_project_id");
-
-    // Force a hard reload to reset all React state and contexts
-    window.location.href = "/";
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      setAuth(false);
+      setUser(null);
+      localStorage.removeItem("easypeasy_session_id");
+      localStorage.removeItem("easypeasy_session_project_id");
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Logout error:", error);
+      setIsLoggingOut(false);
+    }
   };
 
   const goHome = () => {
@@ -136,10 +139,14 @@ export default function TopBar({ creditButtonRef }: TopBarProps = {}) {
               variant="ghost"
               size="sm"
               onClick={handleLogout}
+              disabled={isLoggingOut}
               className="text-muted-foreground hover:text-foreground hidden sm:flex ml-1"
             >
-              <LogOut className="w-4 h-4 md:mr-2" />
-              <span className="hidden md:inline">Logout</span>
+              {isLoggingOut ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /></>
+              ) : (
+                <><LogOut className="w-4 h-4 md:mr-2" /><span className="hidden md:inline">Logout</span></>
+              )}
             </Button>
           </>
         )}
