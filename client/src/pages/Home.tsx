@@ -470,12 +470,30 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---- HOW IT WORKS ---- */}
+        {/* ---- HOW IT WORKS (Premium Card - Pure white border, purple glow on hover, spacing unchanged) ---- */}
         <section className="relative py-24 px-4 bg-muted/30 overflow-hidden">
-          <div className="relative z-10 max-w-6xl mx-auto">
-            <motion.h2 initial={{ opacity: 0, y: -80 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-100px" }} transition={{ duration: 0.8, ease: "easeOut" }} className="text-3xl md:text-4xl font-bold text-center mb-16">How it works</motion.h2>
+          <div className="relative z-10 max-w-6xl mx-auto rounded-3xl border border-white hover:border-primary/60 hover:shadow-[0_0_50px_rgba(124,58,237,0.35)] transition-all duration-300">
+            <motion.h2 
+              initial={{ opacity: 0, y: -80 }} 
+              whileInView={{ opacity: 1, y: 0 }} 
+              viewport={{ once: true, margin: "-100px" }} 
+              transition={{ duration: 0.8, ease: "easeOut" }} 
+              className="text-3xl md:text-4xl font-bold text-center mb-16"
+            >
+              How it works
+            </motion.h2>
+            
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 md:gap-12">
-              {steps.map((step, i) => <StepCard key={i} index={i} number={step.number} title={step.title} content={step.content} active={true} />)}
+              {steps.map((step, i) => (
+                <StepCard 
+                  key={i} 
+                  index={i} 
+                  number={step.number} 
+                  title={step.title} 
+                  content={step.content} 
+                  active={true} 
+                />
+              ))}
             </div>
           </div>
         </section>
