@@ -27,7 +27,7 @@ export default defineConfig({
     },
   },
   root: path.resolve(import.meta.dirname, "client"),
-  // publicDir line REMOVED
+  publicDir: path.resolve(import.meta.dirname, "client", "public"), // <-- ADD THIS
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
