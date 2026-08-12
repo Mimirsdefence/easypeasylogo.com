@@ -34,12 +34,10 @@ export default function Checkout() {
     checkPurchaseStatus();
   }, []);
 
-  // ✅ FIX: Clear loading state when component mounts
   useEffect(() => {
     setLoadingPriceId(null);
   }, []);
 
-  // ✅ FIX: Clear loading state when user returns to the tab
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -72,7 +70,7 @@ export default function Checkout() {
         return;
       }
 
-      let amount = 100; // default for starter or 5-revision pack
+      let amount = 100;
       if (isStarter) {
         amount = 100;
       } else if (priceId === 'price_1TvG7j0IfYdAlbaaANQOBR0F') {
@@ -194,11 +192,9 @@ export default function Checkout() {
                       <p className="text-muted-foreground text-sm mb-1">Shape your identity with your first professional revisions.</p>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
-                      {/* 🔥 NEW PURPLE BADGE WITH GLOW */}
                       <Badge className="bg-[#5B21B6] text-white text-[10px] shadow-[0_0_30px_rgba(124,58,237,0.8)] hover:shadow-[0_0_40px_rgba(124,58,237,0.9)] transition-all duration-300 border border-white/20">
                         🔥 30% OFF – FIRST TIME BUYER
                       </Badge>
-                      {/* 🔥 PRICE IN WHITE WITH SUBTLE PURPLE GLOW */}
                       <div className="flex items-center gap-2">
                         <span className="text-2xl font-bold text-white [text-shadow:0_0_20px_rgba(124,58,237,0.6)]">$5.25</span>
                         <span className="text-sm text-white/50 line-through">$7.49</span>
@@ -324,7 +320,7 @@ export default function Checkout() {
                   credits: 200,
                   label: "Pro",
                   badge: "Recommended",
-                  bonusLabel: "+5 BONUS REVISIONS FIRST MONTH",
+                  // ✅ REMOVED: bonusLabel – no special text
                   priceId: "price_1TvG7p0IfYdAlbaatlAQEsF7",
                   features: [
                     "10 Monthly Revisions",
@@ -339,7 +335,8 @@ export default function Checkout() {
                   credits: 600,
                   label: "Studio",
                   badge: "Launch Bonus",
-                  bonusLabel: "+10 BONUS REVISIONS FIRST MONTH",
+                  // ✅ CHANGED: Replaced bonus text with savings badge
+                  savingsBadge: "🚀 Save $18 vs. top-ups",
                   priceId: "price_1TvG7p0IfYdAlbaartzEYmnh",
                   featured: true,
                   includes: "Everything in Pro +",
@@ -357,7 +354,8 @@ export default function Checkout() {
                   credits: 1200,
                   label: "Enterprise",
                   badge: "Premium Tier",
-                  bonusLabel: "+15 BONUS REVISIONS FIRST MONTH",
+                  // ✅ CHANGED: Replaced bonus text with savings badge
+                  savingsBadge: "🚀 Save $40 vs. top-ups",
                   priceId: "price_1TvG7j0IfYdAlbaaVeUVBov0",
                   includes: "Everything in Studio +",
                   features: [
@@ -385,7 +383,12 @@ export default function Checkout() {
                         {sub.label} {sub.featured && <Sparkles className="w-4 h-4 text-[#7C3AED]" />}
                       </h3>
                       {sub.includes && <p className="text-[10px] text-muted-foreground italic mb-1">{sub.includes}</p>}
-                      <p className="text-[#7C3AED] text-[10px] font-bold uppercase tracking-wider">{sub.bonusLabel}</p>
+                      {/* ✅ NEW: Savings badge for Studio and Enterprise */}
+                      {sub.savingsBadge && (
+                        <Badge className="bg-[#5B21B6] text-white text-[10px] shadow-[0_0_30px_rgba(124,58,237,0.8)] hover:shadow-[0_0_40px_rgba(124,58,237,0.9)] transition-all duration-300 border border-white/20 mt-1">
+                          {sub.savingsBadge}
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold">{sub.price}</div>
