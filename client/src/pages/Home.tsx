@@ -470,9 +470,9 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---- HOW IT WORKS (Premium Card - Pure white border, purple glow on hover, spacing unchanged) ---- */}
-        <section className="relative py-24 px-4 bg-muted/30 overflow-hidden">
-          <div className="relative z-10 max-w-6xl mx-auto rounded-3xl border border-white hover:border-primary/60 hover:shadow-[0_0_50px_rgba(124,58,237,0.35)] transition-all duration-300">
+        {/* ---- HOW IT WORKS (Premium Card - Exact grey section boundaries, no grey bg) ---- */}
+        <section className="relative px-4 overflow-hidden">
+          <div className="relative z-10 max-w-6xl mx-auto rounded-3xl border border-white hover:border-primary/60 hover:shadow-[0_0_50px_rgba(124,58,237,0.35)] transition-all duration-300 py-24">
             <motion.h2 
               initial={{ opacity: 0, y: -80 }} 
               whileInView={{ opacity: 1, y: 0 }} 
