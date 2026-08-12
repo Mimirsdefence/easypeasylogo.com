@@ -335,26 +335,50 @@ export default function Home() {
     ]
   };
 
-  // ---- 3D MOUSE TILT VALUES ----
+  // ---- CLICK-DRAG 3D TILT (replaces hover tilt) ----
   const cardRef = useRef<HTMLDivElement>(null);
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const rotateX = useTransform(mouseY, [-150, 150], [6, -6]);
-  const rotateY = useTransform(mouseX, [-150, 150], [-6, 6]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [rotationX, setRotationX] = useState(0);
+  const [rotationY, setRotationY] = useState(0);
+  const [startMouseX, setStartMouseX] = useState(0);
+  const [startMouseY, setStartMouseY] = useState(0);
+  const [startRotX, setStartRotX] = useState(0);
+  const [startRotY, setStartRotY] = useState(0);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const mouseXPos = e.clientX - centerX;
-    const mouseYPos = e.clientY - centerY;
-    mouseX.set(mouseXPos);
-    mouseY.set(mouseYPos);
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    setIsDragging(true);
+    setStartMouseX(e.clientX);
+    setStartMouseY(e.clientY);
+    setStartRotX(rotationX);
+    setStartRotY(rotationY);
   };
 
-  const handleMouseLeave = () => {
-    mouseX.set(0);
-    mouseY.set(0);
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - startMouseX;
+    const deltaY = e.clientY - startMouseY;
+    // Keep the same 6° range as before
+    const newRotY = Math.max(-6, Math.min(6, startRotY + deltaX * 0.1));
+    const newRotX = Math.max(-6, Math.min(6, startRotX - deltaY * 0.1));
+    setRotationX(newRotX);
+    setRotationY(newRotY);
+  };
+
+  const handleMouseUp = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      setRotationX(0);
+      setRotationY(0);
+    }
+  };
+
+  // Snap back when mouse leaves the section
+  const handleSectionMouseLeave = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      setRotationX(0);
+      setRotationY(0);
+    }
   };
 
   return (
@@ -492,23 +516,29 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---- HOW IT WORKS (Clean Premium: breathing room, entrance animation, depth shadow, 3D mouse tilt) ---- */}
-        <section className="relative px-4 overflow-hidden">
+        {/* ---- HOW IT WORKS (Clean Premium: breathing room, entrance animation, depth shadow, click-drag 3D tilt) ---- */}
+        <section 
+          className="relative px-4 overflow-hidden"
+          onMouseLeave={handleSectionMouseLeave}
+        >
           <motion.div
             ref={cardRef}
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.7, ease: "easeOut" }}
+            onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
             whileHover={{ scale: 1.02 }}
             style={{
-              rotateX: rotateX,
-              rotateY: rotateY,
+              rotateX: rotationX,
+              rotateY: rotationY,
               transformPerspective: 800,
+              transition: isDragging ? "none" : "transform 0.6s cubic-bezier(0.23, 1, 0.32, 1)",
             }}
-            className="relative z-10 max-w-6xl mx-auto rounded-3xl border border-white hover:border-primary/60 hover:shadow-[0_0_50px_rgba(124,58,237,0.35)] transition-all duration-300 pt-32 pb-24 shadow-[0_20px_60px_rgba(0,0,0,0.4)]"
+            className={`relative z-10 max-w-6xl mx-auto rounded-3xl border border-white hover:border-primary/60 hover:shadow-[0_0_50px_rgba(124,58,237,0.35)] transition-all duration-300 pt-32 pb-24 shadow-[0_20px_60px_rgba(0,0,0,0.4)] ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           >
             <motion.h2 
               initial={{ opacity: 0, y: -80 }} 
