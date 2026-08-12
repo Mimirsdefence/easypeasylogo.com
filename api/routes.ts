@@ -435,7 +435,7 @@ export function registerRoutes(
 
       // ✅ UPDATED: Live Price IDs with correct credit mapping
       const PRICE_CREDIT_MAP: Record<string, number> = {
-        "price_1TvG7n0IfYdAlbaaeFio0fDS": 50,    // Starter Pack (5 revisions)
+        "price_1U3Umf0IfYdAlbaaTjRtd4JZ": 50,    // Starter Pack (5 revisions) - UPDATED
         "price_1TvG7o0IfYdAlbaaq4hLeJYL": 50,    // 5 revisions
         "price_1TvG7l0IfYdAlbaawtqWABhv": 250,   // 25 revisions
         "price_1TvG7j0IfYdAlbaaANQOBR0F": 500,   // 50 revisions
