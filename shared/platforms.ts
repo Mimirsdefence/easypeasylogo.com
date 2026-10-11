@@ -183,7 +183,7 @@ export const PLATFORM_SPECS: PlatformSpec[] = [
     assetTypes: ["banner"],
     width: 1584,
     height: 396,
-    generatorRatio: "21:9",
+    generatorRatio: "4:1",
     codeOverlay: true,
     safeZone: { x: 242, y: 48, width: 1100, height: 300 },
     maxTextChars: 30,
