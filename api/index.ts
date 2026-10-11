@@ -1,6 +1,19 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
 
+/**
+ * Wall-clock budget for this serverless function. Vercel's default on Hobby is
+ * 10s, which is not enough to generate two concepts (kie.ai Nano Banana /
+ * Gemini 2.5 Flash Image needs ~10-25s for a pair). 60s is the maximum a Hobby
+ * project may request; Pro allows more.
+ *
+ * NOTE: this project uses the legacy `builds` pipeline in vercel.json, where the
+ * platform ignores this export — the authoritative value lives in
+ * builds[].config.maxDuration there. Kept here so the intent is visible from the
+ * function itself (and so it still applies if the config is modernised).
+ */
+export const maxDuration = 60;
+
 const app = express();
 
 // Logging middleware
