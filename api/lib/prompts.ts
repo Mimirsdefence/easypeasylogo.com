@@ -16,6 +16,22 @@ export interface BrandSummary {
 }
 
 /**
+ * Concept divergence contract.
+ *
+ * Root cause it fixes: the frozen n8n Agent-1 system prompt (prompts.data.ts)
+ * says `design_brief_2` must be "a slight variation of the first brief". Agent 2
+ * mirrors that, so both generated concepts come back as two flavours of the same
+ * layout. The contract is appended verbatim to BOTH user messages, which forces
+ * the two concepts apart without editing the frozen system prompts.
+ */
+export const CONCEPT_DIVERGENCE_CONTRACT = `Concept divergence contract (mandatory — this overrides "a slight variation"):
+- Always deliver TWO concepts that read as two clearly DIFFERENT creative directions for the same brand.
+- Keep shared: brand meaning, colour palette, typography rules, key elements, tone.
+- Change between them: composition archetype, layout geometry, background treatment, focal structure, camera/viewpoint.
+- Concept 2 must NOT be a variation, mirror or recolour of concept 1 — never reuse the same layout bones.
+- Name the archetype of each concept explicitly (e.g. "centred emblem lockup on a dark ground" for one, "asymmetric open composition, rule of thirds, light gradient ground" for the other).`;
+
+/**
  * Agent 1 user message — same shape as the n8n template:
  * abuse score, existing summary, the user's message and attached-image intent.
  */
@@ -52,7 +68,10 @@ Attached image intent:
 - attachedImage: ${attachedImage}
 
 Instructions:
-- Use the summary as context and update it. If empty, treat this as the first interaction.`;
+- Use the summary as context and update it. If empty, treat this as the first interaction.
+- When you populate meta.design_brief_1 and meta.design_brief_2, they must describe two different composition archetypes — not one brief plus a variation.
+
+${CONCEPT_DIVERGENCE_CONTRACT}`;
 }
 
 /**
@@ -92,6 +111,8 @@ Alternative Concept Brief: ${val(args.designBrief2)}
 Image Intent Flag: ${val(args.imageUsage, "none")}
 Reference Image URL: ${val(args.attachedImage, "")}
 Reference Mode: ${val(args.referenceMode, "N/A")}
+
+${CONCEPT_DIVERGENCE_CONTRACT}
 
 --- COMMAND ---
 Generate the prompt_payloads JSON block using the data input provided above according to your system formatting and prompt engineering rules.`;

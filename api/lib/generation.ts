@@ -15,6 +15,9 @@ import {
   extractJson,
   type BrandSummary,
 } from "./prompts";
+import { buildOverlayText, reviewConcepts, type ReviewResult } from "./platform-reviewer";
+import { composePlatformImage } from "./overlay";
+import { needsCodeOverlay, resolvePlatformSpec, type PlatformSpec } from "../../shared/platforms";
 import { GENERATION_CREDIT_COST } from "../../shared/pricing";
 
 export { GENERATION_CREDIT_COST };
@@ -70,6 +73,24 @@ export function buildUserContent(
     ];
   }
   return text;
+}
+
+/**
+ * Resolve the concrete platform canvas from the Agent-1 summary.
+ * `null` means "no specific platform matched" — the generator decides freely.
+ */
+export function specFromSummary(summary: unknown): PlatformSpec | null {
+  const s = (summary ?? {}) as BrandSummary;
+  return resolvePlatformSpec({
+    assetType: s.asset?.type,
+    platform: s.asset?.platform,
+    format: s.asset?.format,
+  });
+}
+
+function textUsageFromSummary(summary: unknown): string | null {
+  const s = (summary ?? {}) as BrandSummary;
+  return s.asset?.text_usage ?? null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -294,6 +315,8 @@ export interface ConceptPayload {
 export async function runPromptMaker(input: PromptMakerInput): Promise<{
   response: string;
   concepts: ConceptPayload[];
+  /** deterministic platform review (format/ratio, divergence, overlay plan) */
+  review: ReviewResult;
 }> {
   const userText = buildAgent2UserMessage({
     summary: input.summary as BrandSummary | null,
@@ -353,7 +376,43 @@ export async function runPromptMaker(input: PromptMakerInput): Promise<{
     } satisfies ConceptPayload;
   });
 
-  return { response: String(parsed?.response ?? ""), concepts };
+  // Code-layer quality gate: force the platform canvas ratio, tell the generator
+  // to keep the safe zone free of text where the server draws it, and push the
+  // two concepts apart when Agent 2 returned two flavours of the same layout.
+  const review = reviewConcepts({
+    summary: input.summary ?? {},
+    assetType: (input.summary as BrandSummary | null)?.asset?.type,
+    platform: (input.summary as BrandSummary | null)?.asset?.platform,
+    format: (input.summary as BrandSummary | null)?.asset?.format,
+    textUsage: (input.summary as BrandSummary | null)?.asset?.text_usage,
+    concepts: concepts.map((concept, i) => ({
+      index: i,
+      sceneTitle: concept.scene_title,
+      finalPrompt: concept.final_prompt,
+      aspectRatio: concept.aspect_ratio,
+      imageInput: concept.image_input,
+    })),
+  });
+
+  const reviewNotes = [
+    ...review.issues,
+    ...review.concepts.flatMap((c) => c.issues.map((issue) => `concept ${c.index + 1}: ${issue}`)),
+  ];
+  if (reviewNotes.length) {
+    console.warn(`[generation] platform review (${review.specId ?? "no spec"}): ${reviewNotes.join(" | ")}`);
+  }
+
+  const patchedConcepts = concepts.map((concept, i) => {
+    const reviewed = review.concepts[i];
+    if (!reviewed || !reviewed.patched) return concept;
+    return {
+      ...concept,
+      final_prompt: reviewed.patchedPrompt,
+      aspect_ratio: reviewed.aspectRatio || concept.aspect_ratio,
+    };
+  });
+
+  return { response: String(parsed?.response ?? ""), concepts: patchedConcepts, review };
 }
 
 /* ------------------------------------------------------------------ */
@@ -375,7 +434,23 @@ export async function ensureKieJobs(input: GenerationBatchInput): Promise<number
 
   if (existing && existing.length) return existing.length;
 
-  const { concepts } = await runPromptMaker(input);
+  const { concepts, review } = await runPromptMaker(input);
+
+  // The stored payload keeps the exact kie.ai input at the top level and adds the
+  // review below it, so a finished job can be audited without another Grok call.
+  const reviewRecord = {
+    specId: review.specId,
+    similarity: review.similarity,
+    divergent: review.divergent,
+    overlay: review.overlay,
+    issues: review.issues,
+    concepts: review.concepts.map((c) => ({
+      index: c.index,
+      archetypes: c.archetypes,
+      patched: c.patched,
+      issues: c.issues,
+    })),
+  };
 
   for (let i = 0; i < concepts.length; i++) {
     const concept = concepts[i];
@@ -395,34 +470,92 @@ export async function ensureKieJobs(input: GenerationBatchInput): Promise<number
       scene_title: concept.scene_title,
       kie_task_id: taskId,
       status: "queued",
-      payload: apiPayload,
+      payload: { ...apiPayload, review: reviewRecord },
     });
   }
 
   return concepts.length;
 }
 
-async function uploadToStorage(projectId: string, conceptIndex: number, url: string): Promise<string> {
+/** What the server needs in order to finish a raw generator output in code. */
+interface ComposeRequest {
+  spec: PlatformSpec;
+  headline: string;
+  subline: string | null;
+  textUsage: unknown;
+}
+
+interface UploadResult {
+  /** public Storage URL of the shipped artwork */
+  url: string;
+  /** true when the bytes were re-composed in code (crop to canvas + text overlay) */
+  composed: boolean;
+  /** human-readable audit trail; empty means "nothing to report" */
+  notes: string[];
+}
+
+/**
+ * Download the generator output, finish it server-side (exact platform canvas +
+ * code-drawn text where the spec asks for it) and store the result. The raw
+ * generator URLs stay in `generation_jobs.raw_urls`; a compose failure degrades
+ * gracefully to the untouched image instead of failing the whole batch.
+ */
+async function uploadToStorage(
+  projectId: string,
+  conceptIndex: number,
+  url: string,
+  compose?: ComposeRequest | null,
+): Promise<UploadResult> {
+  const notes: string[] = [];
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`download failed: ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
+    let buf = Buffer.from(await res.arrayBuffer());
     const extMatch = url.match(/\.(png|jpe?g|webp)/i);
-    const ext = (extMatch?.[1] || "jpg").toLowerCase();
+    let ext = (extMatch?.[1] || "jpg").toLowerCase();
+    let composed = false;
+
+    if (compose?.spec) {
+      try {
+        const result = await composePlatformImage(buf, {
+          spec: compose.spec,
+          headline: compose.headline,
+          subline: compose.subline,
+          textUsage: compose.textUsage,
+        });
+        buf = result.buffer;
+        ext = result.format === "png" ? "png" : "jpg";
+        composed = true;
+        notes.push(...result.notes);
+        if (result.width !== compose.spec.width || result.height !== compose.spec.height) {
+          notes.push(
+            `canvas mismatch after compose: ${result.width}x${result.height} != ${compose.spec.width}x${compose.spec.height}`,
+          );
+        }
+        if (needsCodeOverlay(compose.spec, compose.textUsage) && !result.textDrawn) {
+          notes.push("code overlay was required but no text was drawn");
+        }
+      } catch (err: any) {
+        console.warn(`[generation] overlay compose failed, keeping raw image: ${err.message}`);
+        notes.push(`overlay failed: ${err.message}`);
+      }
+    }
+
     const path = `${projectId}/${Date.now()}-${conceptIndex}.${ext}`;
+    const contentType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
 
     const { error } = await supabaseAdmin.storage
       .from("generations")
-      .upload(path, buf, { contentType: `image/${ext}`, upsert: true });
+      .upload(path, buf, { contentType, upsert: true });
 
     if (error) throw new Error(error.message);
 
     const { data } = supabaseAdmin.storage.from("generations").getPublicUrl(path);
-    if (data?.publicUrl) return data.publicUrl;
+    if (data?.publicUrl) return { url: data.publicUrl, composed, notes };
     throw new Error("no public url");
   } catch (err: any) {
     console.warn(`[generation] Storage upload failed, using temporary URL: ${err.message}`);
-    return url;
+    return { url, composed: false, notes: [...notes, `upload failed: ${err.message}`] };
   }
 }
 
@@ -452,6 +585,19 @@ export async function runGenerationBatch(
   opts: { deadlineMs?: number } = {},
 ): Promise<GenerationBatchState> {
   const deadline = Date.now() + (opts.deadlineMs ?? 40_000);
+
+  // Resolve the canvas + overlay text once: the summary was refreshed by Agent 1
+  // in the same turn, and buildOverlayText mirrors the reviewer's overlay plan.
+  const spec = specFromSummary(input.summary);
+  const textUsage = textUsageFromSummary(input.summary);
+  const overlayText = buildOverlayText(input.summary);
+  const compose: ComposeRequest | null = spec
+    ? { spec, headline: overlayText.headline, subline: overlayText.subline, textUsage }
+    : null;
+
+  if (spec && needsCodeOverlay(spec, textUsage) && !overlayText.headline) {
+    console.warn(`[generation] ${spec.label} needs a code overlay but the summary carries no brand name/text`);
+  }
 
   try {
     await ensureKieJobs(input);
@@ -485,11 +631,27 @@ export async function runGenerationBatch(
         const info = await getKieRecordInfo(job.kie_task_id);
 
         if (info.state === "success" && info.resultUrls.length) {
-          const stableUrl = await uploadToStorage(input.projectId, job.concept_index, info.resultUrls[0]);
+          const uploaded = await uploadToStorage(input.projectId, job.concept_index, info.resultUrls[0], compose);
+          const priorPayload = job.payload && typeof job.payload === "object" ? job.payload : {};
           await supabaseAdmin
             .from("generation_jobs")
-            .update({ status: "done", result_url: stableUrl, raw_urls: info.resultUrls })
+            .update({
+              status: "done",
+              result_url: uploaded.url,
+              raw_urls: info.resultUrls,
+              payload: {
+                ...priorPayload,
+                artwork: {
+                  specId: spec?.id ?? null,
+                  composed: uploaded.composed,
+                  notes: uploaded.notes,
+                },
+              },
+            })
             .eq("id", job.id);
+          if (uploaded.notes.length) {
+            console.warn(`[generation] job ${job.id} artwork notes: ${uploaded.notes.join(" | ")}`);
+          }
         } else if (info.state === "failed" || info.state === "error" || info.state === "cancelled") {
           await supabaseAdmin
             .from("generation_jobs")
@@ -522,6 +684,19 @@ async function finalizeGeneration(input: GenerationBatchInput): Promise<Generati
     const sorted = claimed.sort(
       (a: any, b: any) => Number(a.concept_index) - Number(b.concept_index),
     );
+
+    // Post-generation audit trail: every note the reviewer or the code overlay
+    // left behind means the shipped artwork deviates from the plan. Surface it
+    // in one line per batch instead of digging through the job rows later.
+    const audit = sorted.flatMap((job: any) => {
+      const notes: string[] = Array.isArray(job.payload?.artwork?.notes) ? job.payload.artwork.notes : [];
+      const reviewIssues: string[] = Array.isArray(job.payload?.review?.issues) ? job.payload.review.issues : [];
+      const labels = [...notes, ...reviewIssues];
+      return labels.map((n) => `concept ${Number(job.concept_index) + 1}: ${n}`);
+    });
+    if (audit.length) {
+      console.warn(`[generation] finalized with review/overlay notes: ${audit.join(" | ")}`);
+    }
 
     const { data: projectRow } = await supabaseAdmin
       .from("projects")
