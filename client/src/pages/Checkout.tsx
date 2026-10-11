@@ -8,6 +8,13 @@ import { CheckCircle2, Sparkles, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { motion } from "framer-motion";
+import { STRIPE_PRICES, getPriceDef, type PriceDef } from "@shared/pricing";
+
+const STARTER_PRICE_ID = STRIPE_PRICES.find((p) => p.name === "Starter Pack")?.id ?? "";
+const TOP_UP_PRICES: PriceDef[] = STRIPE_PRICES.filter((p) => p.mode === "payment");
+const SUBSCRIPTION_PRICES: PriceDef[] = STRIPE_PRICES.filter((p) => p.mode === "subscription");
+
+const REVISIONS_PER_CREDIT = 10; // 10 credits = 1 revision
 
 export default function Checkout() {
   const { state: creditsState, setCredits } = useCredits();
@@ -48,16 +55,14 @@ export default function Checkout() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
-  const [topUpQuantities, setTopUpQuantities] = useState({
-    100: 1,
-    500: 1,
-    1000: 1
-  });
+  const [topUpQuantities, setTopUpQuantities] = useState<Record<number, number>>(
+    Object.fromEntries(TOP_UP_PRICES.map((p) => [p.credits, 1]))
+  );
 
   const handleQuantityChange = (amount: number, delta: number) => {
     setTopUpQuantities(prev => ({
       ...prev,
-      [amount]: Math.max(1, prev[amount as keyof typeof prev] + delta)
+      [amount]: Math.max(1, (prev[amount] ?? 1) + delta)
     }));
   };
 
@@ -70,18 +75,9 @@ export default function Checkout() {
         return;
       }
 
-      let amount = 100;
-      if (isStarter) {
-        amount = 100;
-      } else if (priceId === 'price_1TvG7j0IfYdAlbaaANQOBR0F') {
-        amount = 1000;
-      } else if (priceId === 'price_1TvG7l0IfYdAlbaawtqWABhv') {
-        amount = 500;
-      } else {
-        amount = 100;
-      }
-
-      const quantity = isStarter ? 1 : topUpQuantities[amount as keyof typeof topUpQuantities];
+      const priceDef = getPriceDef(priceId);
+      const amount = priceDef?.credits ?? 100;
+      const quantity = isStarter ? 1 : topUpQuantities[amount] ?? 1;
 
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
@@ -109,38 +105,67 @@ export default function Checkout() {
 
   const isStarterVisible = hasPurchased === false;
 
-  const topUpPacks = [
-    {
-      amount: 100,
-      price: 7.49,
-      badge: "Instant",
-      displayRevisions: 5,
-      displayConcepts: 10,
-      desc: "Quick fuel for your next 10 concepts.",
-      priceId: "price_1TvG7o0IfYdAlbaaq4hLeJYL"
-    },
-    {
-      amount: 500,
-      price: 34.99,
-      badge: "Best Value",
-      displayRevisions: 25,
-      displayConcepts: 50,
-      desc: "Perfect for ongoing design projects (50 concepts).",
-      priceId: "price_1TvG7l0IfYdAlbaawtqWABhv"
-    },
-    {
-      amount: 1000,
-      price: 59.99,
-      badge: "Power Pack",
-      displayRevisions: 50,
-      displayConcepts: 100,
-      desc: "Built for serious creative runs (100 concepts).",
-      priceId: "price_1TvG7j0IfYdAlbaaANQOBR0F"
-    }
-  ];
+  const topUpPacks = TOP_UP_PRICES.map((p) => ({
+    amount: p.credits,
+    price: Number(p.usd.replace("$", "")),
+    badge: p.credits <= 50 ? "Instant" : p.credits <= 250 ? "Best Value" : "Power Pack",
+    displayRevisions: p.credits / REVISIONS_PER_CREDIT,
+    displayConcepts: (p.credits / REVISIONS_PER_CREDIT) * 2,
+    desc:
+      p.credits <= 50
+        ? "Quick fuel for your next 10 concepts."
+        : p.credits <= 250
+          ? "Perfect for ongoing design projects (50 concepts)."
+          : "Built for serious creative runs (100 concepts).",
+    priceId: p.id
+  }));
 
   const cardClasses = "p-6 rounded-xl border border-[#7C3AED]/40 ring-1 ring-[#7C3AED]/20 bg-card/50 space-y-4 hover:border-[#8c64ff] hover:shadow-[0_0_20px_rgba(140,100,255,0.15)] transition-colors transition-shadow shadow-[0_0_25px_rgba(124,58,237,0.35)]";
   const starterCardClasses = "p-6 rounded-xl border border-[#7C3AED]/50 outline outline-2 outline-[#7C3AED]/30 bg-card/50 space-y-4 hover:border-[#8c64ff] hover:shadow-[0_0_35px_rgba(168,85,247,0.45)] transition-all shadow-[0_0_30px_rgba(124,58,237,0.45)]";
+
+  const SUBSCRIPTION_EXTRAS: Record<string, { label: string; badge?: string; savingsBadge?: string; featured?: boolean; includes?: string; extras: string[] }> = {
+    "Pro Plan": {
+      label: "Pro",
+      badge: "Recommended",
+      extras: ["Priority generation", "Extended designer memory"]
+    },
+    "Studio Plan": {
+      label: "Studio",
+      badge: "Launch Bonus",
+      savingsBadge: "🚀 Save $18 vs. top-ups",
+      featured: true,
+      includes: "Everything in Pro +",
+      extras: ["Faster mockups", "Advanced typography intelligence", "Deeper designer memory"]
+    },
+    "Enterprise Plan": {
+      label: "Enterprise",
+      badge: "Premium Tier",
+      savingsBadge: "🚀 Save $40 vs. top-ups",
+      includes: "Everything in Studio +",
+      extras: ["Maximum designer intelligence", "Brand continuity system", "Ultra-priority generation"]
+    }
+  };
+
+  const subscriptionPlans = SUBSCRIPTION_PRICES.map((p) => {
+    const cfg = SUBSCRIPTION_EXTRAS[p.name] ?? { label: p.name, extras: [] };
+    const revisions = p.credits / REVISIONS_PER_CREDIT;
+    return {
+      price: p.usd,
+      credits: p.credits,
+      priceId: p.id,
+      label: cfg.label,
+      badge: cfg.badge,
+      savingsBadge: cfg.savingsBadge,
+      featured: cfg.featured,
+      includes: cfg.includes,
+      features: [
+        `${revisions} Monthly Revisions`,
+        `Total of ${revisions * 2} Monthly Unique Concepts (2 per revision)`,
+        "Logos, Banners, & Social Media Thumbnails",
+        ...cfg.extras
+      ]
+    };
+  });
 
   if (hasPurchased === null) {
     return null;
@@ -216,12 +241,12 @@ export default function Checkout() {
                     </li>
                   </ul>
                   <Button
-                    onClick={() => handlePurchase("price_1U3Umf0IfYdAlbaaTjRtd4JZ", true)}
+                    onClick={() => handlePurchase(STARTER_PRICE_ID, true)}
                     disabled={loadingPriceId !== null}
                     className="w-full bg-gradient-to-r from-[#5B21B6] via-[#6D28D9] to-[#7C3AED] text-white font-bold hover:scale-105 transition-all duration-200 hover:shadow-[0_0_22px_rgba(124,58,237,0.6)] active:scale-95 hover:ring-purple-500/40 rounded-xl"
                     data-testid="button-purchase-starter"
                   >
-                    {loadingPriceId === "price_1U3Umf0IfYdAlbaaTjRtd4JZ" ? (
+                    {loadingPriceId === STARTER_PRICE_ID ? (
                       <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Connecting to Stripe...</>
                     ) : "Get Starter Pack"}
                   </Button>
@@ -314,60 +339,7 @@ export default function Checkout() {
               variants={{ hidden: {}, show: { transition: { delayChildren: 0.05, staggerChildren: 0.12 } } }}
               className="grid grid-cols-1 gap-6"
             >
-              {[
-                {
-                  price: "$13.99",
-                  credits: 200,
-                  label: "Pro",
-                  badge: "Recommended",
-                  // ✅ REMOVED: bonusLabel – no special text
-                  priceId: "price_1TvG7p0IfYdAlbaatlAQEsF7",
-                  features: [
-                    "10 Monthly Revisions",
-                    "Total of 20 Monthly Unique Concepts (2 per revision)",
-                    "Logos, Banners, & Social Media Thumbnails",
-                    "Priority generation",
-                    "Extended designer memory"
-                  ]
-                },
-                {
-                  price: "$27.00",
-                  credits: 600,
-                  label: "Studio",
-                  badge: "Launch Bonus",
-                  // ✅ CHANGED: Replaced bonus text with savings badge
-                  savingsBadge: "🚀 Save $18 vs. top-ups",
-                  priceId: "price_1TvG7p0IfYdAlbaartzEYmnh",
-                  featured: true,
-                  includes: "Everything in Pro +",
-                  features: [
-                    "30 Monthly Revisions",
-                    "Total of 60 Monthly Unique Concepts (2 per revision)",
-                    "Logos, Banners, & Social Media Thumbnails",
-                    "Faster mockups",
-                    "Advanced typography intelligence",
-                    "Deeper designer memory"
-                  ]
-                },
-                {
-                  price: "$49.99",
-                  credits: 1200,
-                  label: "Enterprise",
-                  badge: "Premium Tier",
-                  // ✅ CHANGED: Replaced bonus text with savings badge
-                  savingsBadge: "🚀 Save $40 vs. top-ups",
-                  priceId: "price_1TvG7j0IfYdAlbaaVeUVBov0",
-                  includes: "Everything in Studio +",
-                  features: [
-                    "60 Monthly Revisions",
-                    "Total of 120 Monthly Unique Concepts (2 per revision)",
-                    "Logos, Banners, & Social Media Thumbnails",
-                    "Maximum designer intelligence",
-                    "Brand continuity system",
-                    "Ultra-priority generation"
-                  ]
-                }
-              ].map((sub, i) => (
+              {subscriptionPlans.map((sub, i) => (
                 <motion.div
                   key={i}
                   variants={{

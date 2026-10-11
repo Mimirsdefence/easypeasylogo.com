@@ -2,18 +2,39 @@ import type { Express } from "express";
 import type { Server } from "http";
 import Stripe from "stripe";
 import express from "express";
-import { createClient } from "@supabase/supabase-js";
+import { PRICE_CREDIT_MAP, GENERATION_CREDIT_COST } from "../../shared/pricing";
+import {
+  supabaseAdmin,
+  runDesignerTurn,
+  runGenerationBatch,
+  normalizeUserId,
+  AbuseError,
+  AgentOutputError,
+} from "./lib/generation";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-01-28.clover",
 });
 
-const supabaseAdmin = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const serviceKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-const processedEvents = new Set<string>();
+const na = (v: unknown): string | null =>
+  typeof v === "string" && v && v !== "N/A" ? v : null;
+
+function parseMultipart(raw: Buffer, boundary: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const delim = `--${boundary}`;
+  const parts = raw.toString("binary").split(delim).slice(1, -1);
+  for (const part of parts) {
+    const headerEnd = part.indexOf("\r\n\r\n");
+    if (headerEnd === -1) continue;
+    const header = part.slice(0, headerEnd);
+    const body = part.slice(headerEnd + 4).replace(/\r\n$/, "");
+    const nameMatch = header.match(/name="([^"]+)"/);
+    if (nameMatch) out[nameMatch[1]] = body;
+  }
+  return out;
+}
 
 export function registerRoutes(
   httpServer: Server,
@@ -38,20 +59,38 @@ export function registerRoutes(
         return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
-      if (processedEvents.has(event.id)) {
-        return res.json({ received: true });
+      // DB idempotency (stripe_events has a unique constraint on event_id).
+      const { error: dedupeError } = await supabaseAdmin
+        .from("stripe_events")
+        .insert({
+          event_id: event.id,
+          event_type: event.type,
+          processed_at: new Date().toISOString(),
+        });
+
+      if (dedupeError && dedupeError.code === "23505") {
+        return res.json({ received: true, duplicate: true });
+      }
+      if (dedupeError) {
+        // Table missing or transient error — log and continue (do not lose the event).
+        console.warn("[stripe] dedupe insert error:", dedupeError.message);
       }
 
-      if (event.type === "checkout.session.completed") {
-        const session = event.data.object as Stripe.Checkout.Session;
-        const userId = session.metadata?.userId;
-        const credits = Number(session.metadata?.credits || 0);
-        const mode = session.mode;
+      try {
+        if (event.type === "checkout.session.completed") {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const userId = session.metadata?.userId;
+          const mode = session.mode;
 
-        console.log("Webhook session.mode:", mode, "userId:", userId);
+          // Metadata carries totalCredits (base × quantity); fall back to the shared map.
+          const credits =
+            Number(session.metadata?.credits || 0) ||
+            PRICE_CREDIT_MAP[session.metadata?.priceId ?? ""] ||
+            0;
 
-        if (userId) {
-          try {
+          console.log("Webhook session.mode:", mode, "userId:", userId, "credits:", credits);
+
+          if (userId && credits > 0) {
             const { error: rpcError } = await supabaseAdmin.rpc("increment_credits", {
               uid: userId,
               amount: credits,
@@ -63,8 +102,6 @@ export function registerRoutes(
             }
 
             if (mode === "subscription" && session.customer && session.subscription) {
-              console.log("Saving subscription data - customer:", session.customer, "subscription:", session.subscription);
-
               const { error: subError } = await supabaseAdmin
                 .from("user_subscriptions")
                 .upsert(
@@ -81,98 +118,227 @@ export function registerRoutes(
                 console.error("Supabase subscription upsert failed:", subError);
                 return res.status(500).json({ error: "Failed to save subscription data" });
               }
-
-              console.log("Subscription data saved successfully");
             }
-          } catch (error) {
-            console.error("Critical error during checkout fulfillment:", error);
-            return res.status(500).json({ error: "Internal server error during fulfillment" });
           }
-        }
-      } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
-        const subscription = event.data.object as Stripe.Subscription;
-        const subscriptionId = subscription.id;
-        const status = subscription.status;
-        const cancelAtPeriodEnd = subscription.cancel_at_period_end;
-        const cancelAt = subscription.cancel_at;
-        const cancelAtDate = cancelAt ? new Date(cancelAt * 1000).toISOString() : null;
+        } else if (event.type === "invoice.paid") {
+          // Renewal safety: only grant credits on recurring cycles.
+          // The initial subscription is already granted in checkout.session.completed.
+          const invoice = event.data.object as Stripe.Invoice;
 
-        console.log("Webhook subscription event:", event.type, "subscriptionId:", subscriptionId, "status:", status, "cancelAtPeriodEnd:", cancelAtPeriodEnd, "cancelAt RAW:", cancelAt, "cancelAtDate:", cancelAtDate);
+          if (invoice.billing_reason === "subscription_cycle" && invoice.subscription) {
+            const { data: sub } = await supabaseAdmin
+              .from("user_subscriptions")
+              .select("user_id")
+              .eq("stripe_subscription_id", invoice.subscription)
+              .maybeSingle();
 
-        const updatePayload = {
-          subscription_status: status,
-          cancel_at_period_end: cancelAtPeriodEnd,
-          cancel_at: cancelAtDate,
-          updated_at: new Date().toISOString(),
-        };
+            if (sub?.user_id) {
+              const priceId = invoice.lines?.data?.[0]?.price?.id;
+              const credits = priceId ? PRICE_CREDIT_MAP[priceId] ?? 0 : 0;
 
-        console.log("Supabase update payload:", JSON.stringify(updatePayload));
+              if (credits > 0) {
+                const { error: rpcError } = await supabaseAdmin.rpc("increment_credits", {
+                  uid: sub.user_id,
+                  amount: credits,
+                });
+                if (rpcError) console.error("invoice.paid credit grant failed:", rpcError);
+              }
 
-        try {
-          const { data: updateData, error: updateError } = await supabaseAdmin
+              await supabaseAdmin
+                .from("user_subscriptions")
+                .update({
+                  subscription_status: "active",
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("stripe_subscription_id", invoice.subscription);
+            }
+          }
+        } else if (event.type === "invoice.payment_failed") {
+          // Subscription safety: no credits on failure — mark past_due.
+          const invoice = event.data.object as Stripe.Invoice;
+          if (invoice.subscription) {
+            await supabaseAdmin
+              .from("user_subscriptions")
+              .update({
+                subscription_status: "past_due",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("stripe_subscription_id", invoice.subscription);
+          }
+        } else if (
+          event.type === "customer.subscription.updated" ||
+          event.type === "customer.subscription.deleted"
+        ) {
+          const subscription = event.data.object as Stripe.Subscription;
+          const subscriptionId = subscription.id;
+          const status = subscription.status;
+          const cancelAtPeriodEnd = subscription.cancel_at_period_end;
+          const cancelAt = subscription.cancel_at;
+          const cancelAtDate = cancelAt ? new Date(cancelAt * 1000).toISOString() : null;
+
+          const { error: updateError } = await supabaseAdmin
             .from("user_subscriptions")
-            .update(updatePayload)
-            .eq("stripe_subscription_id", subscriptionId)
-            .select();
+            .update({
+              subscription_status: status,
+              cancel_at_period_end: cancelAtPeriodEnd,
+              cancel_at: cancelAtDate,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("stripe_subscription_id", subscriptionId);
 
           if (updateError) {
             console.error("Supabase subscription update FAILED:", JSON.stringify(updateError));
-            // Do not return error - let webhook complete successfully
-          } else {
-            console.log("Supabase subscription update SUCCESS. Rows matched:", updateData?.length ?? 0, "data:", JSON.stringify(updateData));
           }
-        } catch (error) {
-          console.error("Error processing subscription event:", error);
-          // Do not return error - let webhook complete successfully
         }
-      }
 
-      processedEvents.add(event.id);
-      res.json({ received: true });
+        res.json({ received: true });
+      } catch (err: any) {
+        console.error("Webhook processing error:", err.message);
+        res.status(500).json({ error: "Webhook processing failed" });
+      }
     }
   );
 
-  // --- GENERATE LOGO PROXY (MUST BE BEFORE express.json() TO READ RAW BODY) ---
+  // --- DESIGNER CHAT (replaces the n8n proxy; MUST be before express.json for multipart) ---
   app.post("/api/generate-logo", async (req, res) => {
     try {
-      const apiUrl = process.env.VITE_API_BASE_URL;
-      if (!apiUrl) {
-        console.error("[proxy] VITE_API_BASE_URL is not configured");
-        return res.status(500).json({ error: "VITE_API_BASE_URL is not configured" });
-      }
+      const contentType = req.headers["content-type"] || "";
 
-      console.log("[proxy] generate-logo request received");
-      console.log("[proxy] Content-Type:", req.headers["content-type"]);
-      console.log("[proxy] Query:", req.query);
-
+      // Read raw body (multipart or JSON — the client currently sends FormData).
       const chunks: Buffer[] = [];
       for await (const chunk of req) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       }
       const rawBody = Buffer.concat(chunks);
-      console.log("[proxy] Raw body size:", rawBody.length);
 
-      const upstream = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "content-type": req.headers["content-type"] ?? "",
-        },
-        body: rawBody,
-      });
+      let fields: Record<string, string> = {};
 
-      console.log("[proxy] n8n responded with status:", upstream.status);
-
-      if (!upstream.ok) {
-        console.error(`[proxy] n8n returned ${upstream.status}`);
-        return res.status(upstream.status).json({ error: `Upstream error: ${upstream.status}` });
+      if (contentType.includes("multipart/form-data")) {
+        const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+        const boundary = boundaryMatch?.[1] || boundaryMatch?.[2] || "";
+        if (!boundary) {
+          return res.status(400).json({ error: "Missing multipart boundary" });
+        }
+        fields = parseMultipart(rawBody, boundary);
+      } else if (rawBody.length) {
+        try {
+          const parsed = JSON.parse(rawBody.toString("utf8"));
+          if (parsed && typeof parsed === "object") {
+            fields = Object.fromEntries(
+              Object.entries(parsed).map(([k, v]) => [k, String(v ?? "")])
+            );
+          }
+        } catch {
+          return res.status(400).json({ error: "Invalid JSON body" });
+        }
       }
 
-      const data = await upstream.json();
-      console.log("[proxy] n8n response:", JSON.stringify(data).slice(0, 200));
-      res.json(data);
+      const projectId = fields.projectId || "";
+      const userId = normalizeUserId(fields.userId);
+      const sessionId = fields.sessionId || null;
+      const message = fields.message || "";
+      const imageUsage = fields.imageUsage || null;
+      const attachedImage = fields.attachedImage || null;
+
+      if (!projectId) {
+        return res.status(400).json({ error: "Missing projectId" });
+      }
+      if (!message.trim()) {
+        return res.status(400).json({ error: "Missing message" });
+      }
+
+      console.log(`[generate-logo] pid=${projectId} user=${userId || "guest"} msg="${message.slice(0, 60)}"`);
+
+      const turn = await runDesignerTurn({
+        projectId,
+        userId,
+        sessionId,
+        message,
+        imageUsage,
+        attachedImage,
+      });
+
+      // n8n "clean data" behaviour: briefs come from root meta ("N/A" → null).
+      const designBrief1 = na(turn.meta?.design_brief_1);
+      const designBrief2 = na(turn.meta?.design_brief_2);
+      const referenceMode = na(turn.meta?.reference_mode);
+
+      if (turn.status !== "ready_to_generate") {
+        // Collecting info — reply normally (same shape as n8n Respond to Webhook).
+        return res.json({
+          text: turn.response,
+          projectId,
+        });
+      }
+
+      // Ready to generate — guest gate (same as n8n Open Modal Guest).
+      if (!userId) {
+        return res.json({
+          text: "Starting generation engine...",
+          trigger_modal: "signup_required",
+          projectId,
+        });
+      }
+
+      // Credit gate — logged-in users must have enough revisions (GENERATION_CREDIT_COST).
+      const { data: creditRow } = await supabaseAdmin
+        .from("user_credits")
+        .select("balance")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (Number(creditRow?.balance ?? 0) < GENERATION_CREDIT_COST) {
+        return res.json({
+          status: "generation_failed",
+          error:
+            "You have used all your available revisions. Please add more to continue designing with the agent.",
+        });
+      }
+
+      // n8n Respond to Webhook3 → { status: "generation_started", projectId }.
+      // The slow part (Prompt Maker → kie.ai → upload) runs in /api/generate-images.
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const payload = {
+        projectId,
+        userId,
+        responseText: turn.response || null,
+        summary: turn.summary,
+        designBrief1,
+        designBrief2,
+        imageUsage: imageUsage || null,
+        attachedImage: attachedImage || null,
+        referenceMode,
+      };
+
+      fetch(`${baseUrl}/api/generate-images`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${serviceKey()}`,
+        },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch((err: any) => {
+        console.error("[generate-logo] fire-and-forget failed:", err.message);
+      });
+
+      return res.json({ status: "generation_started", projectId });
     } catch (err: any) {
-      console.error("[proxy] generate-logo error:", err.message);
-      res.status(502).json({ error: "Failed to reach generation service" });
+      if (err instanceof AbuseError) {
+        return res.status(429).json({ error: "Too much abuse" });
+      }
+      if (err instanceof AgentOutputError) {
+        console.error("[generate-logo] agent error:", err.message);
+        return res.status(502).json({
+          status: "generation_failed",
+          error: "The designer could not process that request. Please try again.",
+        });
+      }
+      console.error("[generate-logo] error:", err.message);
+      res.status(500).json({
+        status: "generation_failed",
+        error: "Something went wrong. Please try again.",
+      });
     }
   });
 
@@ -180,21 +346,86 @@ export function registerRoutes(
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
-  // --- CHAT CALLBACK (receives responses from n8n) ---
+  // --- ASYNC GENERATION WORKER (internal; self-re-invokes while polling) ---
+  app.post("/api/generate-images", async (req, res) => {
+    const auth = req.headers.authorization || "";
+    if (!serviceKey() || auth !== `Bearer ${serviceKey()}`) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    const {
+      projectId,
+      userId,
+      responseText,
+      summary,
+      designBrief1,
+      designBrief2,
+      imageUsage,
+      attachedImage,
+      referenceMode,
+    } = req.body || {};
+
+    if (!projectId) {
+      return res.status(400).json({ error: "missing projectId" });
+    }
+
+    try {
+      await supabaseAdmin
+        .from("projects")
+        .update({ generation_status: "generating" })
+        .eq("project_id", projectId);
+
+      const result = await runGenerationBatch(
+        {
+          projectId,
+          userId: normalizeUserId(userId),
+          responseText: responseText || null,
+          summary: summary || {},
+          designBrief1: designBrief1 || null,
+          designBrief2: designBrief2 || null,
+          imageUsage: imageUsage || null,
+          attachedImage: attachedImage || null,
+          referenceMode: referenceMode || null,
+        },
+        { deadlineMs: 40_000 },
+      );
+
+      if (result.state === "pending") {
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+        fetch(`${baseUrl}/api/generate-images`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${serviceKey()}`,
+          },
+          body: JSON.stringify(req.body),
+          keepalive: true,
+        }).catch((err: any) => {
+          console.error("[generate-images] re-trigger failed:", err.message);
+        });
+      }
+
+      return res.json(result);
+    } catch (err: any) {
+      console.error("[generate-images] error:", err.message);
+      await supabaseAdmin
+        .from("projects")
+        .update({ generation_status: "failed" })
+        .eq("project_id", projectId);
+      return res.status(500).json({ state: "failed", message: err.message });
+    }
+  });
+
+  // --- CHAT CALLBACK (kept for backward compatibility during transition) ---
   app.post("/api/chat-callback", async (req, res) => {
     try {
       const { projectId, text, concept_1_url, concept_2_url, concept_1_title, concept_2_title, trigger_modal } = req.body;
 
-      console.log("[chat-callback] Received:", { projectId, text: text?.substring(0, 50), concept_1_url, trigger_modal });
-
       if (!projectId) {
-        console.warn("[chat-callback] Missing projectId");
         return res.status(400).json({ error: "Missing projectId" });
       }
 
       if (concept_1_url || concept_2_url) {
-        console.log("[chat-callback] Saving to logo_gallery...");
-        
         const { data: projectRow } = await supabaseAdmin
           .from("projects")
           .select("user_id")
@@ -215,20 +446,17 @@ export function registerRoutes(
           return res.status(500).json({ error: "Failed to save logo to gallery" });
         }
 
-        console.log("[chat-callback] Logo saved to gallery successfully");
         return res.json({ success: true, type: "logo" });
       }
 
       if (text) {
-        console.log("[chat-callback] Saving to chat_messages...");
-        
         const { error: insertError } = await supabaseAdmin
           .from("chat_messages")
           .insert({
             project_id: projectId,
             sender: "designer",
             content: text,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
           });
 
         if (insertError) {
@@ -236,27 +464,22 @@ export function registerRoutes(
           return res.status(500).json({ error: "Failed to save message" });
         }
 
-        console.log("[chat-callback] Message saved to chat_messages successfully");
         return res.json({ success: true, type: "chat" });
       }
 
-      console.warn("[chat-callback] No data to save");
       res.status(400).json({ error: "No data to save" });
-
     } catch (error) {
       console.error("[chat-callback] Error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  // --- LOGO CALLBACK (called by n8n after async generation) ---
+  // --- LOGO CALLBACK (kept for backward compatibility during transition) ---
   app.post("/api/logo-callback", async (req, res) => {
     try {
-      console.log("FULL CALLBACK DATA:", req.body);
       const { projectId, response, concept_1_title, concept_1_url, concept_2_title, concept_2_url } = req.body;
 
       if (!projectId) {
-        console.warn("[callback] Missing projectId — returning 200 anyway");
         return res.json({ received: true, delivered: false, reason: "missing_projectId" });
       }
 
@@ -277,7 +500,6 @@ export function registerRoutes(
           response_text: response || null,
         });
         if (insertError) console.error("[callback] logo_gallery insert error:", insertError.message);
-        else console.log(`[callback] saved to logo_gallery pid=${projectId}`);
 
         try {
           const { data: creditRow } = await supabaseAdmin
@@ -295,11 +517,7 @@ export function registerRoutes(
 
             if (creditError) {
               console.error("[callback] credit deduction error:", creditError.message);
-            } else {
-              console.log(`[callback] deducted 10 credits from user=${projectRow?.user_id}, new balance=${newBalance}`);
             }
-          } else {
-            console.warn("[callback] no user_credits row found for user_id:", projectRow?.user_id);
           }
         } catch (creditErr: any) {
           console.error("[callback] credit deduction threw:", creditErr.message);
@@ -308,7 +526,6 @@ export function registerRoutes(
         console.error("[callback] logo_gallery save failed:", dbErr.message);
       }
 
-      console.log(`[callback] Setting generation_status to "completed" for project ${projectId}`);
       const { error: statusError } = await supabaseAdmin
         .from("projects")
         .update({ generation_status: "completed" })
@@ -316,8 +533,6 @@ export function registerRoutes(
 
       if (statusError) {
         console.error("[callback] generation_status update error:", statusError.message);
-      } else {
-        console.log(`[callback] generation_status updated to "completed" for project ${projectId}`);
       }
 
       res.json({ received: true, delivered: true });
@@ -367,9 +582,9 @@ export function registerRoutes(
       }
 
       const hasSubscription = subscription !== null;
-      res.json({ 
+      res.json({
         has_subscription: hasSubscription,
-        cancel_at: subscription?.cancel_at ?? null 
+        cancel_at: subscription?.cancel_at ?? null,
       });
     } catch (error: any) {
       console.error("Check cancel_at error:", error.message);
@@ -412,18 +627,8 @@ export function registerRoutes(
   });
 
   app.post("/api/create-checkout-session", async (req, res) => {
-    console.log("CHECKOUT HIT");
-    console.log("HEADERS:", req.headers["content-type"]);
-    console.log("BODY RAW:", req.body);
-    console.log("IS BUFFER:", Buffer.isBuffer(req.body));
-    console.log("SUPABASE URL:", process.env.VITE_SUPABASE_URL);
-    console.log("SERVICE ROLE EXISTS:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-
     try {
       const { priceId, quantity, userId } = req.body;
-      console.log("PRICE ID:", priceId);
-      console.log("USER ID:", userId);
-      console.log("QUANTITY:", quantity);
 
       if (!priceId || typeof priceId !== "string") {
         return res.status(400).json({ error: "Missing or invalid priceId" });
@@ -432,17 +637,6 @@ export function registerRoutes(
       if (!userId || typeof userId !== "string") {
         return res.status(400).json({ error: "Missing or invalid userId" });
       }
-
-      // ✅ UPDATED: Live Price IDs with correct credit mapping
-      const PRICE_CREDIT_MAP: Record<string, number> = {
-        "price_1U3Umf0IfYdAlbaaTjRtd4JZ": 50,    // Starter Pack (5 revisions) - UPDATED
-        "price_1TvG7o0IfYdAlbaaq4hLeJYL": 50,    // 5 revisions
-        "price_1TvG7l0IfYdAlbaawtqWABhv": 250,   // 25 revisions
-        "price_1TvG7j0IfYdAlbaaANQOBR0F": 500,   // 50 revisions
-        "price_1TvG7p0IfYdAlbaatlAQEsF7": 100,   // Pro Plan (monthly)
-        "price_1TvG7p0IfYdAlbaartzEYmnh": 300,   // Studio Plan (monthly)
-        "price_1TvG7j0IfYdAlbaaVeUVBov0": 600    // Enterprise Plan (monthly)
-      };
 
       const baseCredits = PRICE_CREDIT_MAP[priceId];
       if (!baseCredits) {
@@ -467,30 +661,24 @@ export function registerRoutes(
 
       const origin = "https://easypeasylogo.com";
 
-      try {
-        const session = await stripe.checkout.sessions.create({
-          mode,
-          line_items: [
-            {
-              price: priceId,
-              quantity: quantity && quantity > 0 ? quantity : 1,
-            },
-          ],
-          metadata: {
-            userId: userId,
-            credits: totalCredits.toString(),
-            priceId: priceId
+      const session = await stripe.checkout.sessions.create({
+        mode,
+        line_items: [
+          {
+            price: priceId,
+            quantity: quantity && quantity > 0 ? quantity : 1,
           },
-          success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${origin}/checkout`,
-        });
+        ],
+        metadata: {
+          userId: userId,
+          credits: totalCredits.toString(),
+          priceId: priceId,
+        },
+        success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/checkout`,
+      });
 
-        console.log("SESSION CREATED:", session.url);
-        res.json({ url: session.url });
-      } catch (err: any) {
-        console.error("STRIPE SESSION ERROR:", err);
-        throw err;
-      }
+      res.json({ url: session.url });
     } catch (err: any) {
       console.error("Stripe checkout error:", err.message);
       res.status(500).json({ error: err.message });
