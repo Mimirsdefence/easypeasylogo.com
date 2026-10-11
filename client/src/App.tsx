@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/state/AuthContext";
 import { Helmet } from "react-helmet-async";
+import { SITE_NAME, TAGLINE } from "@shared/seo";
 import Home from "@/pages/Home";
 import Faq from "@/pages/Faq";
 import Auth from "@/pages/Auth";
@@ -56,31 +57,14 @@ function App() {
 
   return (
     <>
-      {/* 🌐 Global SEO meta tags (fallback for all pages) */}
-      <Helmet
-        defaultTitle="EasyPeasyLogo – AI Brand Identity Designer"
-        titleTemplate="%s | EasyPeasyLogo"
-      >
-        <meta name="description" content="Design your brand identity with an AI designer. Get logos, banners, thumbnails, and social media visuals in minutes. Start your free trial now." />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      {/* 🌐 Global defaults only. Every public page sets its own tags via
+          <Seo />, which reads from shared/seo.ts - the same source the
+          build-time prerenderer uses. No titleTemplate here, so page titles
+          stand on their own. */}
+      <Helmet defaultTitle={`${SITE_NAME} — ${TAGLINE}`}>
         <meta charSet="utf-8" />
-
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://easypeasylogo.com/" />
-        <meta property="og:title" content="EasyPeasyLogo – AI Brand Identity Designer" />
-        <meta property="og:description" content="Design your brand identity with an AI designer. Get logos, banners, thumbnails, and social media visuals in minutes." />
-        <meta property="og:image" content="https://easypeasylogo.com/og-image.png" />
-
-        {/* Twitter */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:url" content="https://easypeasylogo.com/" />
-        <meta name="twitter:title" content="EasyPeasyLogo – AI Brand Identity Designer" />
-        <meta name="twitter:description" content="Design your brand identity with an AI designer. Get logos, banners, thumbnails, and social media visuals in minutes." />
-        <meta name="twitter:image" content="https://easypeasylogo.com/og-image.png" />
-
-        {/* Canonical URL */}
-        <link rel="canonical" href="https://easypeasylogo.com/" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#0a0a0f" />
       </Helmet>
 
       <QueryClientProvider client={queryClient}>

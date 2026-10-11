@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { motion, useAnimation, useMotionValue, useAnimationFrame, useTransform, animate } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import { ArrowRight } from "lucide-react";
-import { Helmet } from "react-helmet-async";
+import { Seo } from "@/components/Seo";
 import logoIcon from "@assets/logo.webp";
 
 // ---- Dynamic image imports (all 22 images) ----
@@ -322,18 +322,7 @@ export default function Home() {
   };
 
   // ---- Structured Data (JSON-LD) ----
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "EasyPeasyLogo",
-    "url": "https://easypeasylogo.com",
-    "logo": "https://easypeasylogo.com/logo.png",
-    "description": "AI-powered brand identity design tool. Create logos, banners, and social media visuals in minutes.",
-    "sameAs": [
-      "https://twitter.com/easypeasylogo",
-      "https://youtube.com/..."
-    ]
-  };
+  // Lives in shared/seo.ts so the prerendered HTML and the client agree.
 
   // ---- CLICK-DRAG 3D TILT (with scale fix) ----
   const cardRef = useRef<HTMLDivElement>(null);
@@ -386,23 +375,7 @@ export default function Home() {
 
   return (
     <>
-      <Helmet>
-        <title>AI Brand Identity Designer – EasyPeasyLogo</title>
-        <meta name="description" content="Design your brand identity with an AI designer. Get logos, banners, thumbnails, and social media visuals in minutes. Start your free trial now." />
-        <meta property="og:title" content="AI Brand Identity Designer – EasyPeasyLogo" />
-        <meta property="og:description" content="Design your brand identity with an AI designer. Get logos, banners, thumbnails, and social media visuals in minutes." />
-        <meta property="og:url" content="https://easypeasylogo.com/" />
-        <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://easypeasylogo.com/og-image.png" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="AI Brand Identity Designer – EasyPeasyLogo" />
-        <meta name="twitter:description" content="Design your brand identity with an AI designer. Get logos, banners, thumbnails, and social media visuals in minutes." />
-        <meta name="twitter:image" content="https://easypeasylogo.com/og-image.png" />
-        <link rel="canonical" href="https://easypeasylogo.com/" />
-        <script type="application/ld+json">
-          {JSON.stringify(structuredData)}
-        </script>
-      </Helmet>
+      <Seo path="/" />
 
       <div className="flex flex-col min-h-screen bg-background text-foreground">
         <TopBar />

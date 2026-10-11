@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import TopBar from "@/components/TopBar";
+import { Seo } from "@/components/Seo";
 import { FileText, Shield, CreditCard, Upload } from "lucide-react";
 
 export default function LegalInfo() {
@@ -52,6 +53,7 @@ export default function LegalInfo() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
+      <Seo path="/legal-info" />
       <TopBar />
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-12">
         <h1 className="text-4xl font-bold tracking-tight mb-8 text-foreground" data-testid="text-legal-title">Legal Information</h1>

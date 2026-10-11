@@ -1,4 +1,5 @@
 import { useAuth } from "@/state/AuthContext";
+import { Seo } from "@/components/Seo";
 import { useGeneration } from "@/state/GenerationContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -167,6 +168,7 @@ export default function Gallery() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <Seo path="/gallery" />
       <TopBar />
       <main className="container mx-auto pt-24 pb-12 px-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">

@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Mail, CheckCircle2, Circle, Eye, EyeOff, X } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
-import { Helmet } from "react-helmet-async";
+import { Seo } from "@/components/Seo";
 
 export default function Auth(props: {
   embedded?: boolean;
@@ -224,21 +224,7 @@ export default function Auth(props: {
   if (mode === 'verify-email') {
     return (
       <>
-        {!embedded && (
-          <Helmet>
-            <title>Verify Email – EasyPeasyLogo</title>
-            <meta name="description" content="Verify your email address to complete your EasyPeasyLogo account setup and start designing your brand identity." />
-            <meta property="og:title" content="Verify Email – EasyPeasyLogo" />
-            <meta property="og:description" content="Verify your email address to complete your EasyPeasyLogo account setup." />
-            <meta property="og:url" content="https://easypeasylogo.com/auth" />
-            <meta property="og:type" content="website" />
-            <meta property="og:image" content="https://easypeasylogo.com/og-image.png" />
-            <meta name="twitter:card" content="summary_large_image" />
-            <meta name="twitter:title" content="Verify Email – EasyPeasyLogo" />
-            <meta name="twitter:description" content="Verify your email address to complete your EasyPeasyLogo account setup." />
-            <link rel="canonical" href="https://easypeasylogo.com/auth" />
-          </Helmet>
-        )}
+        {!embedded && <Seo path="/auth" />}
         <div className={`flex items-center justify-center ${embedded ? '' : 'min-h-screen'} bg-background p-4`}>
           <Card className="w-full max-w-[420px] border-none bg-muted/30 animate-fadeIn relative">
             {renderCloseButton()}
@@ -269,22 +255,7 @@ export default function Auth(props: {
 
   return (
     <>
-      {!embedded && (
-        <Helmet>
-          <title>Sign In or Create Account – EasyPeasyLogo</title>
-          <meta name="description" content="Sign in to your EasyPeasyLogo account or create a new account to start designing your brand identity with our AI designer." />
-          <meta property="og:title" content="Sign In or Create Account – EasyPeasyLogo" />
-          <meta property="og:description" content="Sign in to your EasyPeasyLogo account or create a new account to start designing your brand identity with our AI designer." />
-          <meta property="og:url" content="https://easypeasylogo.com/auth" />
-          <meta property="og:type" content="website" />
-          <meta property="og:image" content="https://easypeasylogo.com/og-image.png" />
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content="Sign In or Create Account – EasyPeasyLogo" />
-          <meta name="twitter:description" content="Sign in to your EasyPeasyLogo account or create a new account to start designing your brand identity with our AI designer." />
-          <meta name="twitter:image" content="https://easypeasylogo.com/og-image.png" />
-          <link rel="canonical" href="https://easypeasylogo.com/auth" />
-        </Helmet>
-      )}
+      {!embedded && <Seo path="/auth" />}
 
       <div className={`flex items-center justify-center ${embedded ? '' : 'min-h-screen'} bg-background p-4`}>
         <Card key={mode} className="w-full max-w-[420px] border-none bg-muted/30 animate-fadeIn relative">

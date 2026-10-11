@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import TopBar from "@/components/TopBar";
-import { Helmet } from "react-helmet-async";
+import { Seo } from "@/components/Seo";
 
 export default function Legal() {
   useEffect(() => {
@@ -19,20 +19,8 @@ export default function Legal() {
 
   return (
     <>
-      <Helmet>
-        <title>Legal – EasyPeasyLogo</title>
-        <meta name="description" content="EasyPeasyLogo legal information – Terms of Service, Privacy Policy, and Refund Policy for AI brand identity design services." />
-        <meta property="og:title" content="Legal – EasyPeasyLogo" />
-        <meta property="og:description" content="EasyPeasyLogo legal information – Terms of Service, Privacy Policy, and Refund Policy for AI brand identity design services." />
-        <meta property="og:url" content="https://easypeasylogo.com/legal" />
-        <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://easypeasylogo.com/og-image.png" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Legal – EasyPeasyLogo" />
-        <meta name="twitter:description" content="EasyPeasyLogo legal information – Terms of Service, Privacy Policy, and Refund Policy for AI brand identity design services." />
-        <meta name="twitter:image" content="https://easypeasylogo.com/og-image.png" />
-        <link rel="canonical" href="https://easypeasylogo.com/legal" />
-      </Helmet>
+      <Seo path="/legal" />
+
 
       <div className="flex flex-col min-h-screen bg-background text-foreground">
         <style>{`html { scroll-behavior: smooth; }`}</style>

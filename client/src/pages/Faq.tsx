@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "wouter";
 import TopBar from "@/components/TopBar";
 import { ChevronDown } from "lucide-react";
-import { Helmet } from "react-helmet-async";
+import { Seo } from "@/components/Seo";
+import { faqPageSchema } from "@shared/seo";
 
 const FAQ_DATA = [
   {
@@ -70,6 +71,8 @@ const FAQ_DATA = [
 
 function FaqCard({ question, answer, index }: { question: string; answer: string; index: number }) {
   const [isOpen, setIsOpen] = useState(false);
+  const panelId = `faq-panel-${index}`;
+  const buttonId = `faq-question-${index}`;
 
   return (
     <motion.div
@@ -78,44 +81,56 @@ function FaqCard({ question, answer, index }: { question: string; answer: string
       transition={{ delay: index * 0.05 }}
       className="group relative"
     >
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full text-left p-6 rounded-xl border transition-all duration-300 backdrop-blur-sm ${
-          isOpen 
-            ? "border-border bg-white/[0.02] ring-0 shadow-none" 
+      <div
+        className={`rounded-xl border backdrop-blur-sm transition-all duration-300 ${
+          isOpen
+            ? "border-border bg-white/[0.02]"
             : "bg-card/50 border-border hover:border-primary/40 hover:shadow-[0_0_20px_rgba(140,100,255,0.15)]"
         }`}
         style={isOpen ? { boxShadow: 'none', textShadow: 'none', filter: 'none', transition: 'none' } : {
           transition: 'box-shadow 0.25s ease, border-color 0.25s ease, filter 0.25s ease'
         }}
       >
-        <div className="flex justify-between items-center gap-4">
-          <h3 className="text-lg font-medium">{question}</h3>
-          <motion.div
+        <h3 className="m-0 text-lg font-medium">
+          <button
+            type="button"
+            id={buttonId}
+            aria-expanded={isOpen}
+            aria-controls={panelId}
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex w-full items-center justify-between gap-4 rounded-xl p-6 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+          >
+            <span>{question}</span>
+          <motion.span
             animate={{ rotate: isOpen ? 180 : 0 }}
             transition={{ duration: 0.3 }}
             className="shrink-0 text-muted-foreground group-hover:text-primary"
+            aria-hidden="true"
           >
             <ChevronDown className="w-5 h-5" />
-          </motion.div>
-        </div>
-        
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="overflow-hidden"
-            >
-              <p className="mt-4 text-[rgba(255,255,255,0.78)] leading-relaxed pt-4 border-t border-border/50">
-                {answer}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </button>
+          </motion.span>
+          </button>
+        </h3>
+
+        {/*
+          The answer stays in the DOM even when the card is closed, so search
+          engines and AI answer engines can quote it. Closed state is only a
+          visual collapse (height 0 + overflow hidden).
+        */}
+        <motion.div
+          id={panelId}
+          role="region"
+          aria-labelledby={buttonId}
+          initial={false}
+          animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="overflow-hidden"
+        >
+          <p className="mx-6 mb-6 pt-4 border-t border-border/50 text-[rgba(255,255,255,0.78)] leading-relaxed">
+            {answer}
+          </p>
+        </motion.div>
+      </div>
 
       {/* Edge Glow effect - ONLY for closed items on hover */}
       <AnimatePresence>
@@ -145,20 +160,8 @@ export default function Faq() {
 
   return (
     <>
-      <Helmet>
-        <title>FAQ – EasyPeasyLogo</title>
-        <meta name="description" content="Frequently asked questions about EasyPeasyLogo's AI brand identity design process, revisions, pricing, and commercial use." />
-        <meta property="og:title" content="FAQ – EasyPeasyLogo" />
-        <meta property="og:description" content="Frequently asked questions about EasyPeasyLogo's AI brand identity design process, revisions, pricing, and commercial use." />
-        <meta property="og:url" content="https://easypeasylogo.com/faq" />
-        <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://easypeasylogo.com/og-image.png" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="FAQ – EasyPeasyLogo" />
-        <meta name="twitter:description" content="Frequently asked questions about EasyPeasyLogo's AI brand identity design process, revisions, pricing, and commercial use." />
-        <meta name="twitter:image" content="https://easypeasylogo.com/og-image.png" />
-        <link rel="canonical" href="https://easypeasylogo.com/faq" />
-      </Helmet>
+      <Seo path="/faq" jsonLd={[faqPageSchema(FAQ_DATA)]} />
+
 
       <div className="flex flex-col min-h-screen bg-background text-foreground">
         <TopBar />
