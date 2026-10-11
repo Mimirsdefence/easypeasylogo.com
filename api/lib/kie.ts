@@ -1,8 +1,70 @@
 /**
- * kie.ai Nano Banana 2 helper — same endpoints as the n8n workflow.
+ * kie.ai image helper — Google "Nano Banana" = Gemini 2.5 Flash Image.
+ *
+ * Same job endpoints as the n8n workflow, but two model ids of the Flash tier are
+ * used depending on the payload:
+ *   - `google/nano-banana`       text-to-image
+ *   - `google/nano-banana-edit`  image-to-image (reference photo / uploaded logo)
+ *
+ * Why Flash and not the Pro tier (`nano-banana-2`, 1K/2K/4K): the Pro model gives
+ * sharper in-image text but routinely needs 40-90s for two concepts, which does
+ * not fit the 60s serverless budget. The Flash tier returns in a fraction of that,
+ * and brand text is drawn in code by the overlay anyway — see shared/platforms.ts.
  */
 
 const KIE_BASE = "https://api.kie.ai/api/v1";
+
+const MODEL_TEXT_TO_IMAGE = "google/nano-banana";
+const MODEL_IMAGE_TO_IMAGE = "google/nano-banana-edit";
+
+/**
+ * Aspect ratios the Flash tier accepts. Unlike the Pro tier it has no 4:1 / 8:1 /
+ * 1:4 / 1:8, so `closestRatio` snaps the LinkedIn banner (1584x396 = 4:1) to 21:9;
+ * the server overlay crops the result back to the exact canvas.
+ */
+const SUPPORTED_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const;
+
+/** "16:9" -> 1.777…, anything unparsable -> null. */
+function parseRatio(ratio?: string): number | null {
+  const match = String(ratio ?? "").trim().match(/^(\d+(?:\.\d+)?)\s*[:x/]\s*(\d+(?:\.\d+)?)$/i);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  return width > 0 && height > 0 ? width / height : null;
+}
+
+/**
+ * Snap whatever the Prompt Maker asked for to a ratio the model can actually
+ * render. Compared in log space so 4:1 is as far from 3:1 as 1:4 is from 1:3.
+ * "auto" and unparsable values are passed through — the model picks, the overlay
+ * still crops to the platform canvas.
+ */
+export function closestRatio(ratio?: string): string {
+  const raw = String(ratio ?? "").trim().toLowerCase();
+  if (!raw || raw === "auto") return "auto";
+
+  const asked = parseRatio(raw);
+  if (!asked) return "auto";
+
+  let best: string = SUPPORTED_RATIOS[0];
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of SUPPORTED_RATIOS) {
+    const parsed = parseRatio(candidate);
+    if (!parsed) continue;
+    const distance = Math.abs(Math.log(parsed) - Math.log(asked));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/** The Flash tier spells JPEG as `jpeg` (the Pro tier used `jpg`) and prefers png. */
+function outputFormat(format?: string): string {
+  const clean = String(format ?? "").trim().toLowerCase().replace(/^\./, "");
+  return clean === "png" ? "png" : "jpeg";
+}
 
 export interface KieApiPayload {
   prompt: string;
@@ -27,15 +89,23 @@ function apiKey(): string {
 }
 
 export async function createKieTask(payload: KieApiPayload): Promise<string> {
+  const references = Array.isArray(payload.image_input)
+    ? payload.image_input.map((url) => String(url ?? "").trim()).filter(Boolean).slice(0, 10)
+    : [];
+  const imageToImage = references.length > 0;
+
+  const input: Record<string, unknown> = {
+    prompt: payload.prompt || "",
+    aspect_ratio: closestRatio(payload.aspect_ratio),
+    output_format: outputFormat(payload.output_format),
+  };
+  if (imageToImage) input.image_urls = references;
+  // `payload.resolution` is deliberately not sent: the Flash tier has no 1K/2K/4K
+  // knob and rejects unknown fields. The stored job payload keeps it for auditing.
+
   const body = {
-    model: "nano-banana-2",
-    input: {
-      prompt: payload.prompt || "",
-      image_input: Array.isArray(payload.image_input) ? payload.image_input : [],
-      aspect_ratio: payload.aspect_ratio || "auto",
-      resolution: payload.resolution || "1K",
-      output_format: payload.output_format || "jpg",
-    },
+    model: imageToImage ? MODEL_IMAGE_TO_IMAGE : MODEL_TEXT_TO_IMAGE,
+    input,
   };
 
   let res: Response;

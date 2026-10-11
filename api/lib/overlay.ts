@@ -1,7 +1,8 @@
 /**
  * overlay — finish a generated image server-side.
  *
- * The generator (Nano Banana 2) is good at artwork but unreliable at two things
+ * The generator (Nano Banana / Gemini 2.5 Flash Image) is good at artwork but
+ * unreliable at two things
  * this product needs:
  *   - exact social canvases (the Facebook Page cover is 820x312 ≈ 2.63:1, which
  *     is not in the model's ratio list)

@@ -2,11 +2,12 @@
  * Platform specs — single source of truth for output canvas, generator aspect
  * ratio and text safe-zones.
  *
- * Why this exists: Nano Banana 2 cannot hit exact social formats (e.g. the
- * Facebook Page cover at 820x312 ≈ 2.63:1 is not in its ratio list). We ask the
- * generator for the closest ratio it supports, then the server crops/pads to the
- * exact canvas. For wide banners the generated text is unreliable, so the server
- * draws the text in code — inside the platform's safe zone — instead.
+ * Why this exists: the generator (Nano Banana / Gemini 2.5 Flash Image) cannot
+ * hit exact social formats (e.g. the Facebook Page cover at 820x312 ≈ 2.63:1 is
+ * not in its ratio list). We ask the generator for the closest ratio it supports,
+ * then the server crops/pads to the exact canvas. For wide banners the generated
+ * text is unreliable, so the server draws the text in code — inside the
+ * platform's safe zone — instead.
  *
  * Pure data + pure functions. Imported by the API (relative path) and available
  * to the client. No node/dom dependencies.
@@ -30,7 +31,10 @@ export interface PlatformSpec {
   /** final canvas we deliver */
   width: number;
   height: number;
-  /** ratio requested from the image generator (must exist in kie.ai's list) */
+  /**
+   * Ratio requested from the image generator. kie.ts snaps it to the Flash tier's
+   * list (4:1 → 21:9 for the LinkedIn banner) before the request goes out.
+   */
   generatorRatio: string;
   /** true = generator must NOT draw text; the server overlays it in code */
   codeOverlay: boolean;

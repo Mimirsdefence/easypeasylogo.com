@@ -1,6 +1,7 @@
 /**
  * Generation pipeline — the code rebuild of the n8n "Brand-Identity-Designer"
- * workflow: Agent 1 (design chat) → Agent 2 (Prompt Maker) → kie.ai Nano Banana 2
+ * workflow: Agent 1 (design chat) → Agent 2 (Prompt Maker) → kie.ai Nano Banana
+ * (Gemini 2.5 Flash Image — see lib/kie.ts for the model choice)
  * → Supabase Storage → gallery + credits.
  */
 import { getSupabaseAdmin } from "./supabase";
