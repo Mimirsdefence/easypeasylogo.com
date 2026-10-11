@@ -300,4 +300,14 @@ create policy if not exists generations_public_read on storage.objects
   for select
   using (bucket_id = 'generations');
 
--- (Writes are done with the service-role key, which bypasses RLS.)
+-- Frontend attachment uploads: guests (anon) and logged-in users may upload
+-- reference images into the public bucket before generation.
+create policy if not exists generations_anon_insert on storage.objects
+  for insert to anon
+  with check (bucket_id = 'generations');
+
+create policy if not exists generations_auth_insert on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'generations');
+
+-- (Server-side writes use the service-role key, which bypasses RLS.)

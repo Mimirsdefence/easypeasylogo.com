@@ -41,7 +41,6 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const SESSION_ID_KEY = 'easypeasy_session_id';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.easypeasylogo.com/webhook/designer-chat';
 
 function useTypewriter(text: string, speed = 28) {
   const [displayed, setDisplayed] = useState("");
@@ -66,22 +65,19 @@ function useTypewriter(text: string, speed = 28) {
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
 const MAX_IMAGE_SIZE = 15 * 1024 * 1024;
 
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_PRESET = import.meta.env.VITE_CLOUDINARY_PRESET;
+const SUPABASE_STORAGE_BUCKET = "generations";
 
-async function uploadFileToCloudinary(file: File, expiresInMinutes: number = 2): Promise<string> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", CLOUDINARY_PRESET);
-  const expiresAt = Math.floor((Date.now() + expiresInMinutes * 60 * 1000) / 1000);
-  formData.append("expires_at", expiresAt.toString());
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-    { method: "POST", body: formData }
-  );
-  if (!res.ok) throw new Error(`Cloudinary upload failed: ${res.status}`);
-  const data = await res.json();
-  return data.secure_url as string;
+async function uploadFileToSupabaseStorage(file: File): Promise<string> {
+  const ext = file.type === "image/png" ? "png" : "jpg";
+  const path = `reference-images/${getSessionId()}/${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .upload(path, file, { contentType: file.type, cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  const { data: publicUrl } = supabase.storage
+    .from(SUPABASE_STORAGE_BUCKET)
+    .getPublicUrl(data.path);
+  return publicUrl.publicUrl;
 }
 
 const IMAGE_URL_REGEX = /https?:\/\/\S+\.(jpg|jpeg|png)(?:\?\S*)?/gi;
@@ -226,7 +222,7 @@ export default function AppPage() {
   const [attachedImageUrls, setAttachedImageUrls] = useState<string[]>([]);
   const [attachedImageIntents, setAttachedImageIntents] = useState<("inspiration" | "reference")[]>([]);
   const [attachedRawFile, setAttachedRawFile] = useState<File | null>(null);
-  const [isCloudinaryUploading, setIsCloudinaryUploading] = useState(false);
+  const [isImageUploading, setIsImageUploading] = useState(false);
   const [activeImageUsage, setActiveImageUsage] = useState<"inspiration" | "reference" | null>(null);
   const [showImageIntentModal, setShowImageIntentModal] = useState(false);
   const pendingIntentRef = useRef<"inspiration" | "reference">("inspiration");
@@ -920,7 +916,7 @@ export default function AppPage() {
       return;
     }
     if (!input.trim() || isSendLocked) return;
-    if (isCloudinaryUploading) return;
+    if (isImageUploading) return;
     
     setSendingProjects(prev => ({ ...prev, [currentActiveId]: true }));
     let projectId = authState.isAuthenticated
@@ -1321,16 +1317,16 @@ export default function AppPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
     const intent = pendingIntentRef.current;
     setAttachedRawFile(file);
-    setIsCloudinaryUploading(true);
+    setIsImageUploading(true);
     try {
-      const secureUrl = await uploadFileToCloudinary(file);
+      const secureUrl = await uploadFileToSupabaseStorage(file);
       setAttachedImageUrls(prev => [...prev, secureUrl]);
       setAttachedImageIntents(prev => [...prev, intent]);
       setActiveImageUsage(intent);
     } catch {
       setUploadError("Image upload failed. Please try again.");
     } finally {
-      setIsCloudinaryUploading(false);
+      setIsImageUploading(false);
     }
   };
 
@@ -1601,8 +1597,8 @@ export default function AppPage() {
               {/* Action Bar + Chat Input */}
               <div className={`border-t border-border bg-background shrink-0 transition-opacity duration-300 ${isLimitReached ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                 <div className="relative max-w-3xl mx-auto p-4 flex flex-col gap-3">
-                  {isCloudinaryUploading && (
-                    <div className="flex items-center gap-2 px-1" data-testid="cloudinary-upload-loading">
+                  {isImageUploading && (
+                    <div className="flex items-center gap-2 px-1" data-testid="image-upload-loading">
                       <div className="w-20 h-20 rounded-lg border border-border/50 bg-muted/40 flex flex-col items-center justify-center gap-1.5 shrink-0">
                         <Loader2 className="w-5 h-5 text-primary animate-spin" />
                         <span className="text-[10px] text-muted-foreground">Uploading…</span>
@@ -1669,7 +1665,7 @@ export default function AppPage() {
                       type="submit"
                       size="icon"
                       className="shrink-0 rounded-full bg-primary text-primary-foreground"
-                      disabled={!input.trim() || isSendLocked || isCloudinaryUploading}
+                      disabled={!input.trim() || isSendLocked || isImageUploading}
                       data-testid="button-send-message"
                     >
                       {isSendLocked ? (
@@ -2004,9 +2000,8 @@ export default function AppPage() {
                 onClick={() => {
                   let url = viewerImages[viewerIndex].url;
                   const title = viewerImages[viewerIndex].title || `Concept ${viewerIndex + 1}`;
-                  if (url.includes("res.cloudinary.com")) {
-                    url = url.replace("/upload/", "/upload/fl_attachment/");
-                  }
+                  const sep = url.includes("?") ? "&" : "?";
+                  url = `${url}${sep}download=`;
                   const a = document.createElement('a');
                   a.href = url;
                   a.download = `${title.replace(/\s+/g, '-').toLowerCase()}.png`;

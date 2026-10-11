@@ -180,7 +180,7 @@ export default function Profile() {
             </div>
           </motion.div>
 
-          {/* Credits Card */}
+          {/* Revisions Card */}
           <motion.div
             variants={{ 
               hidden: { opacity: 0, x: 40 }, 

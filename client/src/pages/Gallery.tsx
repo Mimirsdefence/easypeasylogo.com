@@ -145,9 +145,8 @@ export default function Gallery() {
   const handleDownload = (img: GeneratedImage) => {
     let url = img.url;
     const title = img.title || "Concept";
-    if (url.includes("res.cloudinary.com")) {
-      url = url.replace("/upload/", "/upload/fl_attachment/");
-    }
+    const sep = url.includes("?") ? "&" : "?";
+    url = `${url}${sep}download=`;
     const a = document.createElement("a");
     a.href = url;
     a.download = `${title.replace(/\s+/g, "-").toLowerCase()}.png`;

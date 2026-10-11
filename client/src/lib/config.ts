@@ -1,5 +1,4 @@
 export const CONFIG = {
-  API_BASE_URL: import.meta.env.VITE_API_BASE_URL as string | undefined,
   SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL as string | undefined,
   SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined,
   STRIPE_PUBLIC_KEY: import.meta.env.VITE_STRIPE_PUBLIC_KEY as string | undefined,
