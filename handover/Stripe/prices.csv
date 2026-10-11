@@ -1,9 +1,0 @@
-Price ID,Product ID,Product Name,Product Statement Descriptor,Product Tax Code,Description,Created (UTC),Amount,Currency,Interval,Interval Count,Usage Type,Aggregate Usage,Billing Scheme,Trial Period Days,Tax Behavior
-price_1TvGce0IfYdAlbaauMBNRWm2,prod_U0ScKRnslxrjgH,5 Revisions,,,,2026-07-20 12:48,"72,35",sek,,,,,per_unit,,unspecified
-price_1TvG7p0IfYdAlbaartzEYmnh,prod_U0SgeoWnfsr8lS,Studio Plan,,,,2026-07-20 12:16,"27,00",usd,month,1,licensed,,per_unit,,unspecified
-price_1TvG7p0IfYdAlbaatlAQEsF7,prod_U0SfIttDK4r0zP,Pro Plan,,,,2026-07-20 12:16,"13,99",usd,month,1,licensed,,per_unit,,unspecified
-price_1TvG7o0IfYdAlbaaq4hLeJYL,prod_U0ScKRnslxrjgH,5 Revisions,,,,2026-07-20 12:16,"7,49",usd,,,,,per_unit,,unspecified
-price_1TvG7n0IfYdAlbaaeFio0fDS,prod_U0SWIOzcrLjvck,Starter Pack,,,,2026-07-20 12:16,"7,00",usd,,,,,per_unit,,unspecified
-price_1TvG7l0IfYdAlbaawtqWABhv,prod_U0SdDB44JclEcq,25 Revisions,,,,2026-07-20 12:16,"34,99",usd,,,,,per_unit,,unspecified
-price_1TvG7j0IfYdAlbaaANQOBR0F,prod_U0SdrqJTPhjFKB,50 Revisions,,,,2026-07-20 12:16,"59,99",usd,,,,,per_unit,,unspecified
-price_1TvG7j0IfYdAlbaaVeUVBov0,prod_U0Si1savL4jRhm,Enterprise Plan,,,,2026-07-20 12:16,"49,99",usd,month,1,licensed,,per_unit,,unspecified

@@ -4,3 +4,17 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Hemligheter — committas aldrig
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel
+
+# Loggar och lokal state
+logs/
+*.log
+.state.json
+.stripe-map.json
