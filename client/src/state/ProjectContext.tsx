@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { Project } from '../types';
+import { readStorageJSON, removeStorage, writeStorageJSON } from '../lib/storage';
 
 /**
  * ProjectContext owns the currently active project.
@@ -16,9 +17,9 @@ type ProjectAction = { type: 'SET_PROJECT'; payload: Project | null };
 const STORAGE_KEY = 'easypeasy_active_project';
 
 const getInitialState = (): ProjectState => {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const activeProject = readStorageJSON<Project>(STORAGE_KEY);
   return {
-    activeProject: stored ? JSON.parse(stored) : null,
+    activeProject: activeProject && typeof activeProject === 'object' ? activeProject : null,
   };
 };
 
@@ -41,9 +42,9 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   useEffect(() => {
     if (state.activeProject) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.activeProject));
+      writeStorageJSON(STORAGE_KEY, state.activeProject);
     } else {
-      localStorage.removeItem(STORAGE_KEY);
+      removeStorage(STORAGE_KEY);
     }
   }, [state.activeProject]);
 

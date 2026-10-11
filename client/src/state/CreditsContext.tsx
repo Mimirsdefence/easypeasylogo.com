@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { readStorage, writeStorage } from '@/lib/storage';
 
 interface CreditsState {
   credits: number;
@@ -13,9 +14,10 @@ type CreditsAction =
 const STORAGE_KEY = 'easypeasy_credits';
 
 const getInitialState = (): CreditsState => {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = readStorage(STORAGE_KEY);
+  const credits = stored ? parseInt(stored, 10) : 0;
   return {
-    credits: stored ? parseInt(stored, 10) : 0,
+    credits: Number.isFinite(credits) ? credits : 0,
     isLoadingCredits: false,
   };
 };
@@ -93,8 +95,13 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
           dispatch({ type: 'SET_LOADING_CREDITS', payload: false });
         }
         if (!succeeded) {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) dispatch({ type: 'SET_CREDITS', payload: parseInt(stored, 10) });
+          const stored = readStorage(STORAGE_KEY);
+          if (stored) {
+            const fallbackCredits = parseInt(stored, 10);
+            if (Number.isFinite(fallbackCredits)) {
+              dispatch({ type: 'SET_CREDITS', payload: fallbackCredits });
+            }
+          }
         }
       }
     };
@@ -121,7 +128,7 @@ export const CreditsProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, state.credits.toString());
+    writeStorage(STORAGE_KEY, state.credits.toString());
   }, [state.credits]);
 
   const setCredits = (credits: number) => dispatch({ type: 'SET_CREDITS', payload: credits });

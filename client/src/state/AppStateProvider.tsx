@@ -6,9 +6,15 @@ import { CreditsProvider } from './CreditsContext';
 import { ChatProvider } from './ChatContext';
 import { GenerationProvider } from './GenerationContext';
 import { supabase } from '../lib/supabaseClient';
+import { readStorage, writeStorage } from '../lib/storage';
 
 interface AppStateProviderProps {
   children: ReactNode;
+  /**
+   * Forwarded to <AuthProvider>. The prerenderer passes `false` so public
+   * pages render their real markup instead of the "Loading..." gate.
+   */
+  initialLoading?: boolean;
 }
 
 function AuthHydrator({ children }: { children: ReactNode }) {
@@ -22,10 +28,10 @@ function AuthHydrator({ children }: { children: ReactNode }) {
       try {
         // Initialize guest session: persist sessionId to localStorage and Supabase
         const SESSION_ID_KEY = 'easypeasy_session_id';
-        let sessionId = localStorage.getItem(SESSION_ID_KEY);
+        let sessionId = readStorage(SESSION_ID_KEY);
         if (!sessionId) {
           sessionId = crypto.randomUUID();
-          localStorage.setItem(SESSION_ID_KEY, sessionId);
+          writeStorage(SESSION_ID_KEY, sessionId);
         }
 
         // Ensure guest session exists in Supabase
@@ -78,9 +84,9 @@ function AuthHydrator({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export const AppStateProvider: React.FC<AppStateProviderProps> = ({ children }) => {
+export const AppStateProvider: React.FC<AppStateProviderProps> = ({ children, initialLoading }) => {
   return (
-    <AuthProvider>
+    <AuthProvider initialLoading={initialLoading}>
       <UserProvider>
         <AuthHydrator>
           <ProjectProvider>

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import { readStorageJSON, removeStorage, writeStorageJSON } from '../lib/storage';
 
 export interface User {
   user_id: string;
@@ -18,10 +19,8 @@ type UserAction = { type: 'SET_USER'; payload: User | null };
 const STORAGE_KEY = 'easypeasy_user';
 
 const getInitialState = (): UserState => {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return {
-    user: stored ? JSON.parse(stored) : null,
-  };
+  const user = readStorageJSON<User>(STORAGE_KEY);
+  return { user: user && typeof user === 'object' ? user : null };
 };
 
 const UserContext = createContext<{
@@ -43,9 +42,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     if (state.user) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.user));
+      writeStorageJSON(STORAGE_KEY, state.user);
     } else {
-      localStorage.removeItem(STORAGE_KEY);
+      removeStorage(STORAGE_KEY);
     }
   }, [state.user]);
 

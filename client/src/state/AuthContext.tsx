@@ -37,8 +37,24 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
   }
 }
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(authReducer, initialState);
+export interface AuthProviderProps {
+  children: ReactNode;
+  /**
+   * Value of `state.loading` during the very first render.
+   *
+   * The prerenderer (script/prerender.ts) renders the public pages on a server
+   * where no auth check can run. Passing `false` keeps the real page markup in
+   * the prerendered HTML instead of the "Loading..." gate.
+   */
+  initialLoading?: boolean;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children, initialLoading = true }) => {
+  const [state, dispatch] = useReducer(
+    authReducer,
+    initialLoading,
+    (loading): AuthState => ({ ...initialState, loading }),
+  );
   const [, setLocation] = useLocation();
 
   const setAuth = (isAuthenticated: boolean) => dispatch({ type: 'SET_AUTH', payload: isAuthenticated });
