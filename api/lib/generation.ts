@@ -585,7 +585,7 @@ export async function runGenerationBatch(
   input: GenerationBatchInput,
   opts: { deadlineMs?: number } = {},
 ): Promise<GenerationBatchState> {
-  const deadline = Date.now() + (opts.deadlineMs ?? 40_000);
+  const deadline = Date.now() + (opts.deadlineMs ?? 52_000);
 
   // Resolve the canvas + overlay text once: the summary was refreshed by Agent 1
   // in the same turn, and buildOverlayText mirrors the reviewer's overlay plan.

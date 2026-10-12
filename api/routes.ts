@@ -387,7 +387,7 @@ export function registerRoutes(
           attachedImage: attachedImage || null,
           referenceMode: referenceMode || null,
         },
-        { deadlineMs: 40_000 },
+        { deadlineMs: 52_000 },
       );
 
       if (result.state === "pending") {
